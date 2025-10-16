@@ -83,7 +83,7 @@ export function SingleVerifier({ onVerify }: SingleVerifierProps) {
             </h1>
 
             {/* Input and Button Container */}
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-center max-w-3xl mx-auto">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-center max-w-2xl mx-auto">
                 {/* Email Input */}
                 <input
                     type="email"
@@ -100,10 +100,11 @@ export function SingleVerifier({ onVerify }: SingleVerifierProps) {
                     }}
                     placeholder="username@domain.com"
                     disabled={isVerifying}
-                    className="flex-1 px-5 py-3 text-base border border-gray-300 rounded-xl
-                             focus:outline-none focus:ring-2 focus:ring-[#4169E1] focus:border-transparent
+                    className={`flex-1 px-5 py-3 text-base border border-[#93C5FD] rounded-xl outline-none
+                             focus:border-[#4169E1]
                              disabled:bg-gray-100 disabled:cursor-not-allowed
-                             placeholder:text-gray-400 transition-all duration-200 bg-white shadow-sm"
+                             placeholder:text-gray-400 transition-all duration-200 bg-white`}
+                    style={{ boxShadow: 'none' }}
                     aria-label="Email address to verify"
                 />
 

@@ -4,8 +4,8 @@
  */
 
 import { motion } from 'framer-motion';
-import { User, Mail, Calendar, Shield } from 'lucide-react';
-import { DashboardLayout } from '../components/layout';
+import { User, Mail, Calendar, Shield, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '../components/ui';
 import { useAuth } from '../hooks';
 
@@ -14,46 +14,54 @@ import { useAuth } from '../hooks';
  * @returns ProfilePage JSX element
  */
 export function ProfilePage() {
-    try {
-        const { user, logout, refreshUser, isLoading } = useAuth();
+    const { user, refreshUser, isLoading } = useAuth();
+    const navigate = useNavigate();
 
-        const handleRefreshProfile = async () => {
-            try {
-                await refreshUser();
-            } catch (error) {
-                console.error('Refresh profile error:', error);
-            }
-        };
+    const handleRefreshProfile = async () => {
+        try {
+            await refreshUser();
+        } catch (error) {
+            console.error('Refresh profile error:', error);
+        }
+    };
 
-        const handleLogout = async () => {
-            try {
-                await logout();
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
-        };
+    const handleBackNavigation = () => {
+        try {
+            navigate('/dashboard');
+        } catch (error) {
+            console.error('Back navigation error:', error);
+            window.history.back();
+        }
+    };
 
 
-        return (
-            <DashboardLayout
-                user={user || undefined}
-                onLogout={handleLogout}
-            >
-                <div className="space-y-8">
-                    {/* Welcome section */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-2"
-                    >
-                        <h1 className="text-3xl font-bold text-gray-900">
-                            Your Profile
-                        </h1>
-                        <p className="text-gray-600">
-                            Manage your account information and settings.
-                        </p>
-                    </motion.div>
+    return (
+            <div className="min-h-screen bg-gray-50">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {/* Header with Back Button */}
+                    <div className="mb-8">
+                        <div className="flex items-center space-x-4">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleBackNavigation}
+                                className="flex items-center space-x-1 cursor-pointer"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                <span>Back</span>
+                            </Button>
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">
+                                    Your Profile
+                                </h1>
+                                <p className="text-gray-600 mt-1">
+                                    Manage your account information and settings.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
+                    <div className="space-y-8">
                     {/* Stats cards */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -233,25 +241,7 @@ export function ProfilePage() {
                         </Card>
                     </motion.div>
                 </div>
-            </DashboardLayout>
-        );
-    } catch (error) {
-        console.error('ProfilePage render error:', error);
-
-        return (
-            <DashboardLayout>
-                <div className="text-center space-y-4">
-                    <p className="text-sm text-error-600">
-                        Something went wrong loading your profile.
-                    </p>
-                    <Button
-                        onClick={() => window.location.reload()}
-                        variant="outline"
-                    >
-                        Refresh page
-                    </Button>
-                </div>
-            </DashboardLayout>
-        );
-    }
+            </div>
+        </div>
+    );
 }
