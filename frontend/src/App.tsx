@@ -8,11 +8,12 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
-import { 
-    LoginPage, 
-    SignupPage, 
+import {
+    LoginPage,
+    SignupPage,
     ForgotPasswordPage,
-    DashboardPage, 
+    DashboardPage,
+    ProfilePage,
     NotFoundPage,
     BillingPage,
     PaymentPage,
@@ -48,7 +49,7 @@ export default function App() {
                                 border: '1px solid #e5e7eb',
                                 borderRadius: '6px',
                                 fontSize: '14px',
-                                fontFamily: 'Manrope, Inter, system-ui, sans-serif',
+                                fontFamily: 'Poppins, system-ui, sans-serif',
                             }}
                         />
 
@@ -89,22 +90,31 @@ export default function App() {
                             />
 
                             {/* Protected routes (require authentication) */}
-                            <Route 
-                                path="/dashboard" 
+                            <Route
+                                path="/dashboard"
                                 element={
                                     <ProtectedRoute>
                                         <DashboardPage />
                                     </ProtectedRoute>
-                                } 
+                                }
                             />
 
-                            <Route 
-                                path="/billing" 
+                            <Route
+                                path="/profile"
+                                element={
+                                    <ProtectedRoute>
+                                        <ProfilePage />
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/billing"
                                 element={
                                     <ProtectedRoute>
                                         <BillingPage />
                                     </ProtectedRoute>
-                                } 
+                                }
                             />
 
                             <Route 

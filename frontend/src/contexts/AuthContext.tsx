@@ -343,11 +343,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
                         try {
                             // Verify stored token is still valid by fetching profile
                             const profile = await authApi.getProfile();
+
+                            // Create user object with computed name field
+                            const user = {
+                                ...profile,
+                                name: `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || undefined
+                            };
+
                             dispatch({
                                 type: 'AUTH_SUCCESS',
-                                payload: { user: profile, token: token.trim() }
+                                payload: { user, token: token.trim() }
                             });
-                            
+
                             // Debug logging omitted for production
                         } catch (error) {
                             // Token verification failed - clear all auth data
@@ -437,19 +444,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 
                 // Normal successful login - verify data structure
                 if (isSuccessfulLogin(response.data)) {
+                    // Create user object with computed name field
+                    const user = {
+                        ...response.data.user,
+                        name: `${response.data.user.firstName || ''} ${response.data.user.lastName || ''}`.trim() || undefined
+                    };
+
                     // Store authentication data in localStorage
                     localStorage.setItem(config.auth.jwtStorageKey, response.data.tokens.accessToken);
-                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(response.data.user));
+                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(user));
                     localStorage.setItem(config.auth.refreshTokenStorageKey, response.data.tokens.refreshToken);
-                    
+
                     // Clear login verification state on successful login
                     dispatch({ type: 'CLEAR_LOGIN_STATE' });
-                    
+
                     dispatch({
                         type: 'AUTH_SUCCESS',
-                        payload: { user: response.data.user, token: response.data.tokens.accessToken }
+                        payload: { user, token: response.data.tokens.accessToken }
                     });
-                    
+
                     toast.success('Welcome back!');
                 } else {
                     throw new Error('Invalid login response format');
@@ -537,19 +550,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 };
                 
                 if (isSuccessfulLogin(response.data)) {
+                    // Create user object with computed name field
+                    const user = {
+                        ...response.data.user,
+                        name: `${response.data.user.firstName || ''} ${response.data.user.lastName || ''}`.trim() || undefined
+                    };
+
                     // Store authentication data after successful verification
                     localStorage.setItem(config.auth.jwtStorageKey, response.data.tokens.accessToken);
-                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(response.data.user));
+                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(user));
                     localStorage.setItem(config.auth.refreshTokenStorageKey, response.data.tokens.refreshToken);
-                    
+
                     // Clear signup flow state after successful verification
                     dispatch({ type: 'CLEAR_SIGNUP_STATE' });
-                    
+
                     dispatch({
                         type: 'AUTH_SUCCESS',
-                        payload: { user: response.data.user, token: response.data.tokens.accessToken }
+                        payload: { user, token: response.data.tokens.accessToken }
                     });
-                    
+
                     toast.success('Welcome! Your account is now verified and ready to use.');
                 } else {
                     throw new Error('Invalid verification response format');
@@ -602,19 +621,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 };
                 
                 if (isSuccessfulLogin(response.data)) {
+                    // Create user object with computed name field
+                    const user = {
+                        ...response.data.user,
+                        name: `${response.data.user.firstName || ''} ${response.data.user.lastName || ''}`.trim() || undefined
+                    };
+
                     // Store authentication data after successful OTP verification
                     localStorage.setItem(config.auth.jwtStorageKey, response.data.tokens.accessToken);
-                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(response.data.user));
+                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(user));
                     localStorage.setItem(config.auth.refreshTokenStorageKey, response.data.tokens.refreshToken);
-                    
+
                     // Clear login verification state on successful OTP verification
                     dispatch({ type: 'CLEAR_LOGIN_STATE' });
-                    
+
                     dispatch({
                         type: 'AUTH_SUCCESS',
-                        payload: { user: response.data.user, token: response.data.tokens.accessToken }
+                        payload: { user, token: response.data.tokens.accessToken }
                     });
-                    
+
                     toast.success('Welcome!');
                 } else {
                     throw new Error('Invalid OTP verification response format');
@@ -875,13 +900,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
             try {
                 if (state.token && state.isAuthenticated) {
                     const profile = await authApi.getProfile();
-                    
+
+                    // Create user object with computed name field
+                    const user = {
+                        ...profile,
+                        name: `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || undefined
+                    };
+
                     // Update user data in localStorage
-                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(profile));
-                    
+                    localStorage.setItem(config.auth.userStorageKey, JSON.stringify(user));
+
                     dispatch({
                         type: 'AUTH_SUCCESS',
-                        payload: { user: profile, token: state.token }
+                        payload: { user, token: state.token }
                     });
                 } else {
                     console.warn('Cannot refresh user: no valid authentication token');
@@ -994,18 +1025,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 dispatch({ type: 'AUTH_START' });
                 
                 const response = await authApi.verifyEmailChange(newEmail.trim(), otp.trim());
-                
+
+                // Create user object with computed name field
+                const user = {
+                    ...response.user,
+                    name: `${response.user.firstName || ''} ${response.user.lastName || ''}`.trim() || undefined
+                };
+
                 // Update user data in localStorage with new email
-                localStorage.setItem(config.auth.userStorageKey, JSON.stringify(response.user));
-                
+                localStorage.setItem(config.auth.userStorageKey, JSON.stringify(user));
+
                 // Clear email change flow state on successful verification
                 dispatch({ type: 'CLEAR_EMAIL_CHANGE_STATE' });
-                
+
                 dispatch({
                     type: 'AUTH_SUCCESS',
-                    payload: { user: response.user, token: state.token! }
+                    payload: { user, token: state.token! }
                 });
-                
+
                 toast.success('Email address changed successfully!');
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'Failed to verify email change';
@@ -1033,15 +1070,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     firstName: profileData.firstName.trim(),
                     lastName: profileData.lastName.trim()
                 });
-                
+
+                // Create user object with computed name field
+                const user = {
+                    ...response.user,
+                    name: `${response.user.firstName || ''} ${response.user.lastName || ''}`.trim() || undefined
+                };
+
                 // Update user data in localStorage
-                localStorage.setItem(config.auth.userStorageKey, JSON.stringify(response.user));
-                
+                localStorage.setItem(config.auth.userStorageKey, JSON.stringify(user));
+
                 dispatch({
                     type: 'AUTH_SUCCESS',
-                    payload: { user: response.user, token: state.token! }
+                    payload: { user, token: state.token! }
                 });
-                
+
                 toast.success('Profile updated successfully!');
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'Failed to update profile';

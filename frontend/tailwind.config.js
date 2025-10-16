@@ -67,7 +67,7 @@ export default {
             
             // Typography
             fontFamily: {
-                sans: ['Manrope', 'Inter', 'system-ui', 'sans-serif'],
+                sans: ['Poppins', 'system-ui', 'sans-serif'],
             },
             
             fontSize: {

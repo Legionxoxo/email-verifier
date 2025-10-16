@@ -82,6 +82,17 @@ export function DashboardLayout({
                                         Dashboard
                                     </Link>
                                     <Link
+                                        to="/profile"
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
+                                            isActiveRoute('/profile')
+                                                ? 'bg-gray-100 text-gray-900'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <User className="h-4 w-4" />
+                                        <span>Profile</span>
+                                    </Link>
+                                    <Link
                                         to="/billing"
                                         className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
                                             isActiveRoute('/billing')
