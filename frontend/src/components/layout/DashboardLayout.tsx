@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { LogOut, User, Receipt, Settings } from 'lucide-react';
+import { LogOut, User, Receipt, Settings, Key, History } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../ui';
 
@@ -113,6 +113,28 @@ export function DashboardLayout({
                                     >
                                         <Settings className="h-4 w-4" />
                                         <span>Settings</span>
+                                    </Link>
+                                    <Link
+                                        to="/api-tokens"
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
+                                            isActiveRoute('/api-tokens')
+                                                ? 'bg-gray-100 text-gray-900'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <Key className="h-4 w-4" />
+                                        <span>API Tokens</span>
+                                    </Link>
+                                    <Link
+                                        to="/history"
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
+                                            isActiveRoute('/history')
+                                                ? 'bg-gray-100 text-gray-900'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <History className="h-4 w-4" />
+                                        <span>History</span>
                                     </Link>
                                 </nav>
 

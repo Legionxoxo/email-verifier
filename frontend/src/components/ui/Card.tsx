@@ -33,12 +33,12 @@ interface CardFooterProps extends React.HTMLAttributes<HTMLDivElement> {
  * @param props - Additional div props
  * @returns Card JSX element
  */
-export function Card({ 
-    children, 
+export function Card({
+    children,
     variant = 'default',
     padding = 'md',
-    className, 
-    ...props 
+    className,
+    ...props
 }: CardProps) {
     try {
         const variants = {
@@ -86,8 +86,8 @@ export function Card({
 export function CardHeader({ children, className, ...props }: CardHeaderProps) {
     try {
         return (
-            <div 
-                className={cn('flex flex-col space-y-1.5 pb-4', className)} 
+            <div
+                className={cn('flex flex-col space-y-1.5 pb-4', className)}
                 {...props}
             >
                 {children}
@@ -137,8 +137,8 @@ export function CardContent({ children, className, ...props }: CardContentProps)
 export function CardFooter({ children, className, ...props }: CardFooterProps) {
     try {
         return (
-            <div 
-                className={cn('flex items-center pt-4', className)} 
+            <div
+                className={cn('flex items-center pt-4', className)}
                 {...props}
             >
                 {children}
@@ -161,15 +161,15 @@ export function CardFooter({ children, className, ...props }: CardFooterProps) {
  * @param props - Additional heading props
  * @returns CardTitle JSX element
  */
-export function CardTitle({ 
-    children, 
-    className, 
-    ...props 
+export function CardTitle({
+    children,
+    className,
+    ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
     try {
         return (
-            <h3 
-                className={cn('text-lg font-semibold text-gray-900', className)} 
+            <h3
+                className={cn('text-lg font-semibold text-gray-900', className)}
                 {...props}
             >
                 {children}
@@ -192,15 +192,15 @@ export function CardTitle({
  * @param props - Additional paragraph props
  * @returns CardDescription JSX element
  */
-export function CardDescription({ 
-    children, 
-    className, 
-    ...props 
+export function CardDescription({
+    children,
+    className,
+    ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
     try {
         return (
-            <p 
-                className={cn('text-sm text-gray-600', className)} 
+            <p
+                className={cn('text-sm text-gray-600', className)}
                 {...props}
             >
                 {children}

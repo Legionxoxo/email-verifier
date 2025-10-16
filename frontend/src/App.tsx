@@ -17,7 +17,9 @@ import {
     NotFoundPage,
     BillingPage,
     PaymentPage,
-    SettingsPage
+    SettingsPage,
+    APITokenPage,
+    HistoryPage
 } from './pages';
 
 
@@ -126,13 +128,31 @@ export default function App() {
                                 } 
                             />
 
-                            <Route 
-                                path="/settings" 
+                            <Route
+                                path="/settings"
                                 element={
                                     <ProtectedRoute>
                                         <SettingsPage />
                                     </ProtectedRoute>
-                                } 
+                                }
+                            />
+
+                            <Route
+                                path="/api-tokens"
+                                element={
+                                    <ProtectedRoute>
+                                        <APITokenPage />
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/history"
+                                element={
+                                    <ProtectedRoute>
+                                        <HistoryPage />
+                                    </ProtectedRoute>
+                                }
                             />
 
                             {/* Redirect /subscription to /billing for backward compatibility */}

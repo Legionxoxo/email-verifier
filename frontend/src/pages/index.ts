@@ -12,3 +12,5 @@ export { NotFoundPage } from './NotFoundPage';
 export { BillingPage } from './BillingPage';
 export { PaymentPage } from './PaymentPage';
 export { SettingsPage } from './SettingsPage';
+export { APITokenPage } from './APITokenPage';
+export { HistoryPage } from './HistoryPage';
