@@ -1,12 +1,17 @@
 /**
  * Bulk Email Verifier Component
- * Allows users to upload CSV files for bulk email verification
+ * Multi-step flow for bulk email verification
+ * Step 1: File upload and preview
+ * Step 2: Column selection
  */
 
 import { useState, useRef } from 'react';
-import { Download, X } from 'lucide-react';
+import { Download, X, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { parseEmailCSV, validateCSVFile } from '../../lib/csvParser';
+import { parseCSVFullData, validateCSVFile, type CSVFullDataResult } from '../../lib/csvParser';
+import { BulkVerifierStepOne } from './BulkVerifierStepOne';
+import { BulkVerifierStepTwo } from './BulkVerifierStepTwo';
+import { Button } from '../ui/Button';
 
 
 // Interface for component props
@@ -14,7 +19,12 @@ interface BulkVerifierProps {
     onUpload?: (emails: string[]) => Promise<void>;
     maxFileSizeMB?: number;
     maxRows?: number;
+    onStepChange?: (isUploadStep: boolean) => void;
 }
+
+
+// Step types
+type VerifierStep = 'upload' | 'preview' | 'column-select';
 
 
 /**
@@ -22,17 +32,28 @@ interface BulkVerifierProps {
  * @param props - Component props
  * @returns JSX element
  */
-export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }: BulkVerifierProps) {
+export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, onStepChange }: BulkVerifierProps) {
+    const [currentStep, setCurrentStep] = useState<VerifierStep>('upload');
+
+
+    // Helper to change step and notify parent
+    const changeStep = (newStep: VerifierStep) => {
+        setCurrentStep(newStep);
+        if (onStepChange) {
+            onStepChange(newStep === 'upload');
+        }
+    };
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [emailCount, setEmailCount] = useState<number>(0);
+    const [parsedData, setParsedData] = useState<CSVFullDataResult | null>(null);
+    const [listName, setListName] = useState<string>('');
     const [error, setError] = useState<string>('');
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
 
     /**
-     * Handle file selection
+     * Handle file selection and initial parsing
      */
     const handleFileSelect = async (file: File) => {
         try {
@@ -42,7 +63,7 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
             console.log('File type:', file.type);
 
             setIsProcessing(true);
-            setError(''); // Clear previous errors
+            setError('');
 
             // Validate file
             console.log('Validating file...');
@@ -52,61 +73,39 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
             if (!validation.valid) {
                 const errorMsg = validation.error || 'Invalid file';
                 setError(errorMsg);
+                toast.error(errorMsg);
                 return;
             }
 
-            // Parse CSV
+            // Parse CSV for full data
             console.log('Parsing CSV file...');
-            const result = await parseEmailCSV(file);
+            const result = await parseCSVFullData(file, true);
             console.log('Parse result:', {
-                totalCount: result.totalCount,
-                duplicateCount: result.duplicateCount,
-                errorsCount: result.errors.length,
+                totalRows: result.totalRows,
+                headers: result.headers,
                 previewCount: result.preview.length
             });
-            console.log('First 10 emails preview:', result.preview);
-            console.log('All parsed emails:', result.emails);
 
             // Check row limit
-            if (result.totalCount > maxRows) {
-                console.log('Row limit exceeded:', result.totalCount, '>', maxRows);
-                const errorMsg = `File contains ${result.totalCount} emails. Maximum allowed is ${maxRows.toLocaleString()}.`;
+            if (result.totalRows > maxRows) {
+                console.log('Row limit exceeded:', result.totalRows, '>', maxRows);
+                const errorMsg = `File contains ${result.totalRows} rows. Maximum allowed is ${maxRows.toLocaleString()}.`;
                 setError(errorMsg);
+                toast.error(errorMsg);
                 return;
             }
 
-            // Check if no valid emails found
-            if (result.totalCount === 0) {
-                setError('No valid emails found in CSV file');
+            // Check if no rows found
+            if (result.totalRows === 0) {
+                setError('No data found in CSV file');
+                toast.error('No data found in CSV file');
                 return;
             }
 
-            // Set file and email count
+            // Set file and parsed data
             setSelectedFile(file);
-            setEmailCount(result.totalCount);
-
-            // Show success toast
-            toast.success(`Successfully loaded ${result.totalCount} email(s) from CSV`);
-
-            // Show warnings in toast if any
-            if (result.errors.length > 0) {
-                console.log('Parsing errors:', result.errors);
-                toast.warning(`Found ${result.errors.length} invalid email(s) in CSV`);
-            }
-
-            if (result.duplicateCount > 0) {
-                console.log('Duplicates removed:', result.duplicateCount);
-                toast.info(`Removed ${result.duplicateCount} duplicate email(s)`);
-            }
-
-            // Call upload handler if provided
-            if (onUpload) {
-                console.log('Calling onUpload callback with emails array (length:', result.emails.length, ')');
-                await onUpload(result.emails);
-                console.log('onUpload callback completed');
-            } else {
-                console.log('No onUpload callback provided');
-            }
+            setParsedData(result);
+            changeStep('preview');
 
             console.log('=== BULK CSV UPLOAD COMPLETED ===');
 
@@ -114,11 +113,11 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
             const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
             console.error('File processing error:', error);
             setError(errorMessage);
+            toast.error(errorMessage);
             setSelectedFile(null);
-            setEmailCount(0);
+            setParsedData(null);
         } finally {
             setIsProcessing(false);
-            console.debug('File processing completed');
         }
     };
 
@@ -133,8 +132,6 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
             setIsDragging(true);
         } catch (error) {
             console.error('Drag over error:', error);
-        } finally {
-            console.debug('Drag over handled');
         }
     };
 
@@ -149,8 +146,6 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
             setIsDragging(false);
         } catch (error) {
             console.error('Drag leave error:', error);
-        } finally {
-            console.debug('Drag leave handled');
         }
     };
 
@@ -172,8 +167,6 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
         } catch (error) {
             console.error('Drop error:', error);
             toast.error('Failed to process dropped file');
-        } finally {
-            console.debug('Drop handled');
         }
     };
 
@@ -190,8 +183,6 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
         } catch (error) {
             console.error('File input change error:', error);
             toast.error('Failed to process selected file');
-        } finally {
-            console.debug('File input change handled');
         }
     };
 
@@ -201,136 +192,274 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000 }:
      */
     const openFilePicker = () => {
         try {
-            fileInputRef.current?.click();
+            if (fileInputRef.current) {
+                fileInputRef.current.click();
+            }
         } catch (error) {
             console.error('File picker error:', error);
-        } finally {
-            console.debug('File picker opened');
         }
     };
 
 
     /**
-     * Clear selected file
+     * Clear selected file and reset to upload step
      */
     const clearFile = () => {
         try {
             setSelectedFile(null);
-            setEmailCount(0);
-            setError(''); // Clear error
+            setParsedData(null);
+            setListName('');
+            setError('');
+            changeStep('upload');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
         } catch (error) {
             console.error('Clear file error:', error);
-        } finally {
-            console.debug('File cleared');
         }
     };
 
 
-    return (
-        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Heading */}
-            <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-center text-[#2F327D] mb-6">
-                Or make a <span className="text-[#4169E1]">bulk</span> email verification
-            </h2>
+    /**
+     * Handle header checkbox change - re-parse CSV with new setting
+     */
+    const handleHeaderCheckboxChange = async (header: boolean) => {
+        try {
+            if (!selectedFile) return;
 
-            {/* Upload Card - Smaller Square */}
-            <div
-                className={`relative bg-[#EFF6FF] rounded-2xl p-6
-                           aspect-square max-w-xs mx-auto
-                           border-2 border-dashed transition-all duration-300 cursor-pointer
-                           ${error ? 'border-red-400 bg-red-50' : isDragging ? 'border-[#4169E1] bg-blue-100 scale-[1.01]' : 'border-[#BFDBFE] hover:border-[#93C5FD]'}
-                           ${isProcessing ? 'opacity-50 cursor-wait' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={!isProcessing ? openFilePicker : undefined}
-            >
-                {/* Hidden File Input */}
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,text/csv,application/vnd.ms-excel"
-                    onChange={handleFileInputChange}
-                    className="hidden"
-                    disabled={isProcessing}
-                />
+            setIsProcessing(true);
 
-                {/* Content - Compact */}
-                <div className="flex flex-col items-center justify-center text-center space-y-2 h-full">
-                    {/* Show Error State */}
-                    {error ? (
-                        <div className="space-y-2 px-4">
-                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-                                <X className="w-6 h-6 text-red-500" strokeWidth={2.5} />
+            // Re-parse with new header setting
+            const result = await parseCSVFullData(selectedFile, header);
+            setParsedData(result);
+
+            setIsProcessing(false);
+        } catch (error) {
+            console.error('Header checkbox change error:', error);
+            toast.error('Failed to update preview');
+            setIsProcessing(false);
+        }
+    };
+
+
+    /**
+     * Handle step one completion (preview -> column select)
+     */
+    const handleStepOneNext = async (name: string) => {
+        try {
+            setListName(name);
+            changeStep('column-select');
+        } catch (error) {
+            console.error('Step one next error:', error);
+            toast.error('Failed to proceed to next step');
+        }
+    };
+
+
+    /**
+     * Handle step two completion (verify emails)
+     */
+    const handleStepTwoVerify = async (emails: string[], selectedColumn: string) => {
+        try {
+            console.log('Verifying emails:', {
+                listName,
+                selectedColumn,
+                emailCount: emails.length
+            });
+
+            toast.success(`${emails.length} email(s) ready for verification`);
+
+            // Call upload handler if provided
+            if (onUpload) {
+                console.log('Calling onUpload callback with emails array (length:', emails.length, ')');
+                await onUpload(emails);
+                console.log('onUpload callback completed');
+            } else {
+                console.log('No onUpload callback provided');
+            }
+
+            // Reset to upload step after successful verification
+            clearFile();
+
+        } catch (error) {
+            console.error('Verification error:', error);
+            toast.error('Failed to verify emails');
+        }
+    };
+
+
+    /**
+     * Handle back navigation
+     */
+    const handleBack = () => {
+        try {
+            if (currentStep === 'column-select') {
+                changeStep('preview');
+            } else if (currentStep === 'preview') {
+                clearFile();
+            }
+        } catch (error) {
+            console.error('Back navigation error:', error);
+        }
+    };
+
+
+    /**
+     * Render upload step
+     */
+    const renderUploadStep = () => {
+        return (
+            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+                {/* Heading */}
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-center text-[#2F327D] mb-6">
+                    Or make a <span className="text-[#4169E1]">bulk</span> email verification
+                </h2>
+
+                {/* Upload Card */}
+                <div
+                    className={`relative bg-[#EFF6FF] rounded-2xl p-6
+                               aspect-square max-w-xs mx-auto
+                               border-2 border-dashed transition-all duration-300 cursor-pointer
+                               ${error ? 'border-red-400 bg-red-50' : isDragging ? 'border-[#4169E1] bg-blue-100 scale-[1.01]' : 'border-[#BFDBFE] hover:border-[#93C5FD]'}
+                               ${isProcessing ? 'opacity-50 cursor-wait' : ''}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={!isProcessing ? openFilePicker : undefined}
+                >
+                    {/* Hidden File Input */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv,text/csv,application/vnd.ms-excel"
+                        onChange={handleFileInputChange}
+                        className="hidden"
+                        disabled={isProcessing}
+                    />
+
+                    {/* Content */}
+                    <div className="flex flex-col items-center justify-center text-center space-y-2 h-full">
+                        {/* Show Error State */}
+                        {error ? (
+                            <div className="space-y-2 px-4">
+                                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+                                    <X className="w-6 h-6 text-red-500" strokeWidth={2.5} />
+                                </div>
+                                <p className="text-sm font-semibold text-red-600">Upload Failed</p>
+                                <p className="text-xs text-red-500 break-words">{error}</p>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setError('');
+                                        openFilePicker();
+                                    }}
+                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 cursor-pointer"
+                                >
+                                    Try Again
+                                </button>
                             </div>
-                            <p className="text-sm font-semibold text-red-600">Upload Failed</p>
-                            <p className="text-xs text-red-500 break-words">{error}</p>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setError('');
-                                    openFilePicker();
-                                }}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2"
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            {/* Download Icon */}
-                            <div className={`w-12 h-12 rounded-full bg-[#93C5FD] flex items-center justify-center
-                                           transition-transform duration-300 ${isDragging ? 'scale-110' : ''}`}>
-                                <Download className="w-6 h-6 text-white" strokeWidth={2.5} />
-                            </div>
+                        ) : (
+                            <>
+                                {/* Download Icon */}
+                                <div className={`w-12 h-12 rounded-full bg-[#93C5FD] flex items-center justify-center
+                                               transition-transform duration-300 ${isDragging ? 'scale-110' : ''}`}>
+                                    <Download className="w-6 h-6 text-white" strokeWidth={2.5} />
+                                </div>
 
-                            {/* Import Text */}
-                            <div className="space-y-1">
-                                <h3 className="text-lg font-semibold text-gray-600">
-                                    {isProcessing ? 'Processing...' : 'Import'}
-                                </h3>
-
-                                {selectedFile ? (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center justify-center gap-2 text-gray-700">
-                                            <span className="font-medium text-xs truncate max-w-[150px]">{selectedFile.name}</span>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    clearFile();
-                                                }}
-                                                className="p-1.5 hover:bg-red-100 rounded-full transition-colors group flex-shrink-0"
-                                                aria-label="Remove file"
-                                                title="Remove file"
-                                            >
-                                                <X className="w-4 h-4 text-red-500 group-hover:text-red-600" strokeWidth={2.5} />
-                                            </button>
-                                        </div>
-                                        <p className="text-green-600 font-medium text-xs">
-                                            {emailCount.toLocaleString()} emails
-                                        </p>
-                                        <p className="text-[10px] text-gray-500 mt-1">
-                                            Click to replace
-                                        </p>
-                                    </div>
-                                ) : (
+                                {/* Import Text */}
+                                <div className="space-y-1">
+                                    <h3 className="text-lg font-semibold text-gray-600">
+                                        {isProcessing ? 'Processing...' : 'Import'}
+                                    </h3>
                                     <p className="text-gray-500 text-xs">
                                         {isDragging ? 'Drop CSV here' : 'Select CSV file'}
                                     </p>
-                                )}
-                            </div>
+                                </div>
 
-                            {/* File Info */}
-                            <p className="text-[10px] text-gray-400 font-medium mt-1">
-                                Max {maxRows.toLocaleString()} rows ({maxFileSizeMB}MB)
-                            </p>
-                        </>
-                    )}
+                                {/* File Info */}
+                                <p className="text-[10px] text-gray-400 font-medium mt-1">
+                                    Max {maxRows.toLocaleString()} rows ({maxFileSizeMB}MB)
+                                </p>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
+
+
+    /**
+     * Render preview step
+     */
+    const renderPreviewStep = () => {
+        if (!selectedFile || !parsedData) return null;
+
+        return (
+            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+                {/* Back button - returns to upload step */}
+                <div className="mb-6">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleBack}
+                        className="flex items-center space-x-1 cursor-pointer"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        <span>Back to Upload</span>
+                    </Button>
+                </div>
+
+                <BulkVerifierStepOne
+                    file={selectedFile}
+                    parsedData={parsedData}
+                    onNext={handleStepOneNext}
+                    onSelectDifferentFile={clearFile}
+                    onHeaderCheckboxChange={handleHeaderCheckboxChange}
+                    onOpenFilePicker={openFilePicker}
+                />
+            </div>
+        );
+    };
+
+
+    /**
+     * Render column select step
+     */
+    const renderColumnSelectStep = () => {
+        if (!parsedData) return null;
+
+        return (
+            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+                {/* Back button - returns to preview step */}
+                <div className="mb-6">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleBack}
+                        className="flex items-center space-x-1 cursor-pointer"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        <span>Back to Preview</span>
+                    </Button>
+                </div>
+
+                <BulkVerifierStepTwo
+                    parsedData={parsedData}
+                    onVerify={handleStepTwoVerify}
+                />
+            </div>
+        );
+    };
+
+
+    // Render current step
+    switch (currentStep) {
+        case 'preview':
+            return renderPreviewStep();
+        case 'column-select':
+            return renderColumnSelectStep();
+        default:
+            return renderUploadStep();
+    }
 }

@@ -23,6 +23,16 @@ interface CSVParseResult {
 }
 
 
+// Interface for full CSV data result
+export interface CSVFullDataResult {
+    headers: string[];
+    rows: Record<string, string>[];
+    preview: Record<string, string>[];
+    totalRows: number;
+    detectedEmailColumn: string | null;
+}
+
+
 /**
  * Parse CSV file and extract email addresses
  * @param file - CSV file to parse
@@ -153,6 +163,119 @@ function isValidEmailFormat(email: string): boolean {
         return false;
     } finally {
         console.debug('Email validation completed');
+    }
+}
+
+
+/**
+ * Parse CSV file and return full data with headers
+ * Used for bulk verifier multi-step flow
+ * @param file - CSV file to parse
+ * @param hasHeader - Whether the CSV file has a header row
+ * @returns Promise with full CSV data
+ */
+export async function parseCSVFullData(file: File, hasHeader: boolean = true): Promise<CSVFullDataResult> {
+    try {
+        return new Promise((resolve, reject) => {
+            Papa.parse(file, {
+                header: hasHeader,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    try {
+                        let headers: string[];
+                        let rows: Record<string, string>[];
+
+                        if (hasHeader) {
+                            // Use actual headers from CSV
+                            headers = results.meta.fields || [];
+                            rows = results.data as Record<string, string>[];
+                        } else {
+                            // Generate column headers (Column 1, Column 2, etc.)
+                            const firstRow = results.data[0] as any;
+                            const columnCount = firstRow ? Object.keys(firstRow).length : 0;
+
+                            headers = Array.from({ length: columnCount }, (_, i) => `Column ${i + 1}`);
+
+                            // Transform rows to use generated column names
+                            rows = (results.data as any[]).map(row => {
+                                const transformedRow: Record<string, string> = {};
+                                const rowValues = Object.values(row);
+                                headers.forEach((header, index) => {
+                                    transformedRow[header] = String(rowValues[index] || '');
+                                });
+                                return transformedRow;
+                            });
+                        }
+
+                        const preview = rows.slice(0, 5); // First 5 rows for preview
+                        const detectedEmailColumn = findEmailColumn(headers);
+
+                        resolve({
+                            headers,
+                            rows,
+                            preview,
+                            totalRows: rows.length,
+                            detectedEmailColumn
+                        });
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        reject(new Error(`Failed to process CSV data: ${errorMessage}`));
+                    }
+                },
+                error: (error) => {
+                    reject(new Error(`CSV parsing failed: ${error.message}`));
+                }
+            });
+        });
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(`CSV parsing error: ${errorMessage}`);
+    }
+}
+
+
+/**
+ * Extract emails from parsed CSV data based on selected column
+ * @param rows - Parsed CSV rows
+ * @param emailColumn - Column name containing emails
+ * @returns Array of unique, valid emails and error count
+ */
+export function extractEmailsFromColumn(
+    rows: Record<string, string>[],
+    emailColumn: string
+): { emails: string[]; errors: number; duplicateCount: number } {
+    try {
+        const emailSet = new Set<string>();
+        let errors = 0;
+        let totalEmails = 0;
+
+        rows.forEach((row) => {
+            const email = row[emailColumn]?.trim();
+
+            if (email) {
+                totalEmails++;
+                if (isValidEmailFormat(email)) {
+                    emailSet.add(email.toLowerCase());
+                } else {
+                    errors++;
+                }
+            }
+        });
+
+        const uniqueEmails = Array.from(emailSet);
+        const duplicateCount = totalEmails - uniqueEmails.length;
+
+        return {
+            emails: uniqueEmails,
+            errors,
+            duplicateCount
+        };
+
+    } catch (error) {
+        console.error('Email extraction error:', error);
+        return { emails: [], errors: 0, duplicateCount: 0 };
     }
 }
 

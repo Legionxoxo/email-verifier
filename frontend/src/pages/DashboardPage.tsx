@@ -3,6 +3,7 @@
  * Main email verifier interface with single and bulk verification
  */
 
+import React from 'react';
 import { motion } from 'framer-motion';
 import { DashboardLayout } from '../components/layout';
 import { SingleVerifier, BulkVerifier } from '../components/verifier';
@@ -17,6 +18,7 @@ import { toast } from 'react-toastify';
 export function DashboardPage() {
     try {
         const { user, logout } = useAuth();
+        const [showSingleVerifier, setShowSingleVerifier] = React.useState(true);
 
 
         // Handle logout
@@ -78,30 +80,33 @@ export function DashboardPage() {
                 user={user || undefined}
                 onLogout={handleLogout}
             >
-                {/* Main Content - Fit in one screen */}
-                <div className="h-full overflow-hidden flex items-center justify-center px-4 sm:px-6 lg:px-8">
-                    <div className="w-full max-w-7xl space-y-8 py-4">
-                        {/* Single Email Verifier */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                        >
-                            <SingleVerifier
-                                onVerify={handleSingleVerify}
-                            />
-                        </motion.div>
+                {/* Main Content - Scrollable */}
+                <div className="px-4 sm:px-6 lg:px-8 py-12">
+                    <div className="w-full max-w-7xl space-y-8 mx-auto ">
+                        {/* Single Email Verifier - Hidden when in bulk steps */}
+                        {showSingleVerifier && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 }}
+                            >
+                                <SingleVerifier
+                                    onVerify={handleSingleVerify}
+                                />
+                            </motion.div>
+                        )}
 
                         {/* Bulk Email Verifier */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
+                            transition={{ delay: showSingleVerifier ? 0.2 : 0.1 }}
                         >
                             <BulkVerifier
                                 onUpload={handleBulkUpload}
                                 maxFileSizeMB={100}
                                 maxRows={50000}
+                                onStepChange={setShowSingleVerifier}
                             />
                         </motion.div>
                     </div>
