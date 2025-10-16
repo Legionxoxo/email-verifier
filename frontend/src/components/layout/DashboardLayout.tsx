@@ -48,9 +48,9 @@ export function DashboardLayout({
         };
 
         return (
-            <div className="min-h-screen bg-gray-50">
+            <div className="h-screen overflow-hidden bg-gray-50 flex flex-col">
                 {/* Header */}
-                <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+                <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
                     <div className="px-4 sm:px-6 lg:px-8">
                         <div className="flex items-center justify-between h-16">
                             {/* Logo and title */}
@@ -147,8 +147,8 @@ export function DashboardLayout({
                 </header>
 
                 {/* Main content */}
-                <main className="py-8">
-                    <div className="px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
+                <main className="flex-1 overflow-hidden">
+                    <div className="h-full">
                         {children}
                     </div>
                 </main>
