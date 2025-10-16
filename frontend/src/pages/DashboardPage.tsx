@@ -19,6 +19,7 @@ export function DashboardPage() {
     try {
         const { user, logout } = useAuth();
         const [showSingleVerifier, setShowSingleVerifier] = React.useState(true);
+        const [isSingleVerifying, setIsSingleVerifying] = React.useState(false);
 
 
         // Handle logout
@@ -92,23 +93,26 @@ export function DashboardPage() {
                             >
                                 <SingleVerifier
                                     onVerify={handleSingleVerify}
+                                    onVerifyingChange={setIsSingleVerifying}
                                 />
                             </motion.div>
                         )}
 
-                        {/* Bulk Email Verifier */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: showSingleVerifier ? 0.2 : 0.1 }}
-                        >
-                            <BulkVerifier
-                                onUpload={handleBulkUpload}
-                                maxFileSizeMB={100}
-                                maxRows={50000}
-                                onStepChange={setShowSingleVerifier}
-                            />
-                        </motion.div>
+                        {/* Bulk Email Verifier - Hidden when single verifying */}
+                        {!isSingleVerifying && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: showSingleVerifier ? 0.2 : 0.1 }}
+                            >
+                                <BulkVerifier
+                                    onUpload={handleBulkUpload}
+                                    maxFileSizeMB={100}
+                                    maxRows={50000}
+                                    onStepChange={setShowSingleVerifier}
+                                />
+                            </motion.div>
+                        )}
                     </div>
                 </div>
             </DashboardLayout>

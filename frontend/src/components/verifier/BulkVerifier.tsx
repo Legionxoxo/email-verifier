@@ -12,6 +12,7 @@ import { parseCSVFullData, validateCSVFile, type CSVFullDataResult } from '../..
 import { BulkVerifierStepOne } from './BulkVerifierStepOne';
 import { BulkVerifierStepTwo } from './BulkVerifierStepTwo';
 import { Button } from '../ui/Button';
+import { VerificationProgress, type VerificationStep } from '../ui';
 
 
 // Interface for component props
@@ -24,7 +25,7 @@ interface BulkVerifierProps {
 
 
 // Step types
-type VerifierStep = 'upload' | 'preview' | 'column-select';
+type VerifierStep = 'upload' | 'preview' | 'column-select' | 'verifying';
 
 
 /**
@@ -49,6 +50,7 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
     const [parsedData, setParsedData] = useState<CSVFullDataResult | null>(null);
     const [listName, setListName] = useState<string>('');
     const [error, setError] = useState<string>('');
+    const [verificationStep, setVerificationStep] = useState<VerificationStep>('received');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
 
@@ -267,8 +269,15 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
                 emailCount: emails.length
             });
 
-            toast.success(`${emails.length} email(s) ready for verification`);
+            // Change to verifying step
+            changeStep('verifying');
+            setVerificationStep('received');
 
+            // Step 1: Request received
+            await new Promise(resolve => setTimeout(resolve, 800));
+            setVerificationStep('processing');
+
+            // Step 2: Processing
             // Call upload handler if provided
             if (onUpload) {
                 console.log('Calling onUpload callback with emails array (length:', emails.length, ')');
@@ -276,7 +285,14 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
                 console.log('onUpload callback completed');
             } else {
                 console.log('No onUpload callback provided');
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
+
+            // Step 3: Complete
+            setVerificationStep('complete');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            toast.success(`${emails.length} email(s) verified successfully!`);
 
             // Reset to upload step after successful verification
             clearFile();
@@ -284,6 +300,7 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
         } catch (error) {
             console.error('Verification error:', error);
             toast.error('Failed to verify emails');
+            changeStep('column-select'); // Go back to column select on error
         }
     };
 
@@ -453,12 +470,28 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
     };
 
 
+    /**
+     * Render verifying step
+     */
+    const renderVerifyingStep = () => {
+        return (
+            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <VerificationProgress currentStep={verificationStep} />
+                </div>
+            </div>
+        );
+    };
+
+
     // Render current step
     switch (currentStep) {
         case 'preview':
             return renderPreviewStep();
         case 'column-select':
             return renderColumnSelectStep();
+        case 'verifying':
+            return renderVerifyingStep();
         default:
             return renderUploadStep();
     }
