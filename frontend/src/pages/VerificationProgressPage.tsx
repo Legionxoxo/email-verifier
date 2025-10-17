@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout';
 import { VerificationProgress, type VerificationStep } from '../components/ui';
+import { Button } from '../components/ui';
 import { useAuth } from '../hooks';
 import type { EmailVerificationResult } from './VerificationResultsPage';
 
@@ -29,6 +30,8 @@ export function VerificationProgressPage() {
     const { user, logout } = useAuth();
 
     const [currentStep, setCurrentStep] = useState<VerificationStep>('received');
+    const [errorMessage, setErrorMessage] = useState<string>('');
+    const [isRetrying, setIsRetrying] = useState<boolean>(false);
 
 
     // Handle logout
@@ -43,7 +46,35 @@ export function VerificationProgressPage() {
     };
 
 
-    // Simulate verification progress
+    // Handle retry
+    const handleRetry = () => {
+        try {
+            setIsRetrying(true);
+            setErrorMessage('');
+            setCurrentStep('received');
+            // Reload the page to restart verification
+            window.location.reload();
+        } catch (error) {
+            console.error('Retry error:', error);
+        } finally {
+            console.debug('Retry handler completed');
+        }
+    };
+
+
+    // Handle back to dashboard
+    const handleBackToDashboard = () => {
+        try {
+            navigate('/dashboard', { replace: true });
+        } catch (error) {
+            console.error('Navigation error:', error);
+        } finally {
+            console.debug('Back to dashboard handler completed');
+        }
+    };
+
+
+    // Simulate verification progress (TODO: Replace with actual API polling)
     useEffect(() => {
         try {
             const runVerification = async () => {
@@ -66,8 +97,18 @@ export function VerificationProgressPage() {
                 setCurrentStep('processing');
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
-                // Step 3: Anti-Greylisting - Generate mock results here
+                // Step 3: Anti-Greylisting
                 setCurrentStep('antiGreyListing');
+
+                // Simulate random success/failure for testing
+                const shouldFail = Math.random() < 0.2; // 20% chance of failure for testing
+
+                if (shouldFail) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    setCurrentStep('failed');
+                    setErrorMessage('Verification failed: Worker timeout. Please try again.');
+                    return;
+                }
 
                 // Generate mock results during verification
                 const statuses: Array<'valid' | 'invalid' | 'catch-all' | 'unknown'> = ['valid', 'invalid', 'catch-all', 'unknown'];
@@ -106,7 +147,8 @@ export function VerificationProgressPage() {
             runVerification();
         } catch (error) {
             console.error('Verification progress error:', error);
-            navigate('/dashboard', { replace: true });
+            setCurrentStep('failed');
+            setErrorMessage('An unexpected error occurred. Please try again.');
         }
     }, [jobId, navigate, location.state]);
 
@@ -116,8 +158,32 @@ export function VerificationProgressPage() {
             user={user || undefined}
             onLogout={handleLogout}
         >
-            <div className="flex items-center justify-center min-h-[calc(100vh-200px)] px-4">
-                <VerificationProgress currentStep={currentStep} />
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] px-4 space-y-6">
+                <VerificationProgress
+                    currentStep={currentStep}
+                    errorMessage={errorMessage}
+                />
+
+                {/* Action buttons for failed state */}
+                {currentStep === 'failed' && (
+                    <div className="flex space-x-4">
+                        <Button
+                            variant="outline"
+                            onClick={handleBackToDashboard}
+                            className="cursor-pointer"
+                        >
+                            Back to Dashboard
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={handleRetry}
+                            disabled={isRetrying}
+                            className="cursor-pointer"
+                        >
+                            {isRetrying ? 'Retrying...' : 'Retry'}
+                        </Button>
+                    </div>
+                )}
             </div>
         </DashboardLayout>
     );

@@ -13,7 +13,7 @@ async function checkGravatar(email) {
 		const emailMd5 = getMD5Hash(email.trim().toLowerCase());
 		const gravatarUrl = gravatarBaseUrl + emailMd5 + '?d=404';
 
-		const response = await axiosGet(gravatarUrl, { timeout: 10000 }, true);
+		const response = await axiosGet(gravatarUrl, { timeout: 10000 });
 
 		if (response && response.status !== 200) {
 			return {
