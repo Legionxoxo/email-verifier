@@ -104,7 +104,7 @@ function setupRoutes() {
 				services: {
 					database: 'connected',
 					authentication: 'active',
-					settings: 'active'
+					settings: 'active',
 				},
 				timestamp: new Date().toISOString(),
 			});
