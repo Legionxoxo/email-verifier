@@ -15,8 +15,6 @@ import {
     DashboardPage,
     ProfilePage,
     NotFoundPage,
-    BillingPage,
-    PaymentPage,
     SettingsPage,
     APITokenPage,
     HistoryPage,
@@ -113,24 +111,6 @@ export default function App() {
                             />
 
                             <Route
-                                path="/billing"
-                                element={
-                                    <ProtectedRoute>
-                                        <BillingPage />
-                                    </ProtectedRoute>
-                                }
-                            />
-
-                            <Route 
-                                path="/payment" 
-                                element={
-                                    <ProtectedRoute>
-                                        <PaymentPage />
-                                    </ProtectedRoute>
-                                } 
-                            />
-
-                            <Route
                                 path="/settings"
                                 element={
                                     <ProtectedRoute>
@@ -173,12 +153,6 @@ export default function App() {
                                         <VerificationResultsPage />
                                     </ProtectedRoute>
                                 }
-                            />
-
-                            {/* Redirect /subscription to /billing for backward compatibility */}
-                            <Route
-                                path="/subscription"
-                                element={<Navigate to="/billing" replace />}
                             />
 
                             {/* 404 page */}

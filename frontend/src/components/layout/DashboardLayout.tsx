@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { LogOut, User, Receipt, Settings, Key, History } from 'lucide-react';
+import { LogOut, User, Settings, Key, History } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../ui';
 
@@ -91,17 +91,6 @@ export function DashboardLayout({
                                     >
                                         <User className="h-4 w-4" />
                                         <span>Profile</span>
-                                    </Link>
-                                    <Link
-                                        to="/billing"
-                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
-                                            isActiveRoute('/billing')
-                                                ? 'bg-gray-100 text-gray-900'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <Receipt className="h-4 w-4" />
-                                        <span>Billing</span>
                                     </Link>
                                     <Link
                                         to="/settings"
