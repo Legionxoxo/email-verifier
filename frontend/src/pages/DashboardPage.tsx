@@ -4,12 +4,11 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { DashboardLayout } from '../components/layout';
 import { SingleVerifier, BulkVerifier } from '../components/verifier';
-import { VerificationResultsPage, type EmailVerificationResult } from './VerificationResultsPage';
 import { useAuth } from '../hooks';
-import { toast } from 'react-toastify';
 
 
 /**
@@ -19,10 +18,9 @@ import { toast } from 'react-toastify';
 export function DashboardPage() {
     try {
         const { user, logout } = useAuth();
+        const navigate = useNavigate();
         const [showSingleVerifier, setShowSingleVerifier] = React.useState(true);
         const [isSingleVerifying, setIsSingleVerifying] = React.useState(false);
-        const [showResults, setShowResults] = React.useState(false);
-        const [verificationResults, setVerificationResults] = React.useState<EmailVerificationResult[]>([]);
 
 
         // Handle logout
@@ -40,25 +38,17 @@ export function DashboardPage() {
         // Handle single email verification
         const handleSingleVerify = async (email: string) => {
             try {
-                // TODO: Implement actual API call to your backend
-                console.log('Verifying email:', email);
+                // Generate job ID
+                const jobId = `single_${Date.now()}`;
 
-                // Simulated API call
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                // TODO: Replace with actual API response
-                // Mock result for demonstration
-                const mockResult: EmailVerificationResult = {
-                    email: email,
-                    status: Math.random() > 0.5 ? 'valid' : 'invalid',
-                    reason: Math.random() > 0.5
-                        ? 'This is a valid email address!'
-                        : "This email doesn't have an associated SMTP server."
-                };
-
-                setVerificationResults([mockResult]);
-                setShowResults(true);
-                toast.success(`Email verified successfully`);
+                // Navigate to verification progress page with email data
+                // VerificationProgressPage will handle the simulation and generate mock results
+                navigate(`/verify/${jobId}`, {
+                    state: {
+                        type: 'single',
+                        emails: [email]
+                    }
+                });
 
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Verification failed';
@@ -73,34 +63,17 @@ export function DashboardPage() {
         // Handle bulk upload
         const handleBulkUpload = async (emails: string[]) => {
             try {
-                // TODO: Implement actual API call to your backend
-                console.log('Uploading emails for bulk verification:', emails.length);
+                // Generate job ID
+                const jobId = `bulk_${Date.now()}`;
 
-                // Simulated API call
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // TODO: Replace with actual API response
-                // Mock results for demonstration
-                const statuses: Array<'valid' | 'invalid' | 'catch-all' | 'unknown'> = ['valid', 'invalid', 'catch-all', 'unknown'];
-                const reasons: Record<string, string> = {
-                    valid: 'This is a valid email address!',
-                    invalid: "This email doesn't have an associated SMTP server.",
-                    'catch-all': 'This domain accepts all emails (catch-all).',
-                    unknown: 'Unable to verify this email address.'
-                };
-
-                const mockResults: EmailVerificationResult[] = emails.map(email => {
-                    const status = statuses[Math.floor(Math.random() * statuses.length)];
-                    return {
-                        email: email,
-                        status: status,
-                        reason: reasons[status]
-                    };
+                // Navigate to verification progress page with emails data
+                // VerificationProgressPage will handle the simulation and generate mock results
+                navigate(`/verify/${jobId}`, {
+                    state: {
+                        type: 'bulk',
+                        emails: emails
+                    }
                 });
-
-                setVerificationResults(mockResults);
-                setShowResults(true);
-                toast.success(`${emails.length} emails verified successfully`);
 
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Upload failed';
@@ -110,30 +83,6 @@ export function DashboardPage() {
                 console.debug('Bulk upload completed');
             }
         };
-
-
-        // Handle back from results page
-        const handleBackFromResults = () => {
-            try {
-                setShowResults(false);
-                setVerificationResults([]);
-            } catch (error) {
-                console.error('Back from results error:', error);
-            }
-        };
-
-
-        // Show results page if we have results
-        if (showResults) {
-            return (
-                <VerificationResultsPage
-                    results={verificationResults}
-                    onBack={handleBackFromResults}
-                    user={user || undefined}
-                    onLogout={handleLogout}
-                />
-            );
-        }
 
 
         return (

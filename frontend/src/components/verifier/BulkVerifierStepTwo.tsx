@@ -15,6 +15,7 @@ import { extractEmailsFromColumn } from '../../lib/csvParser';
 interface BulkVerifierStepTwoProps {
     parsedData: CSVFullDataResult;
     onVerify: (emails: string[], selectedColumn: string) => void;
+    isVerifying?: boolean;
 }
 
 
@@ -25,7 +26,8 @@ interface BulkVerifierStepTwoProps {
  */
 export function BulkVerifierStepTwo({
     parsedData,
-    onVerify
+    onVerify,
+    isVerifying = false
 }: BulkVerifierStepTwoProps) {
     const [selectedColumn, setSelectedColumn] = useState<string>(
         parsedData.detectedEmailColumn || parsedData.headers[0] || ''
@@ -152,10 +154,10 @@ export function BulkVerifierStepTwo({
                 <Button
                     variant="primary"
                     onClick={handleVerifyEmails}
-                    disabled={!selectedColumn || emailStats.uniqueCount === 0}
+                    disabled={isVerifying || !selectedColumn || emailStats.uniqueCount === 0}
                     className="cursor-pointer"
                 >
-                    Verify emails
+                    {isVerifying ? 'Verifying...' : 'Verify emails'}
                 </Button>
             </div>
         </div>

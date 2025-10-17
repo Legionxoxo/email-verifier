@@ -3,11 +3,11 @@
  * 3-step progress indicator for email verification
  */
 
-import { CheckCircle2, Server, FileCheck } from 'lucide-react';
+import { CheckCircle2, Server, FileCheck, Shield } from 'lucide-react';
 
 
 // Progress step type
-export type VerificationStep = 'received' | 'processing' | 'complete';
+export type VerificationStep = 'received' | 'processing' | 'antiGreyListing' | 'complete';
 
 
 // Interface for component props
@@ -18,12 +18,13 @@ interface VerificationProgressProps {
 
 /**
  * Verification Progress Component
- * Shows 3-step verification progress with visual indicators
+ * Shows 4-step verification progress with visual indicators
  */
 export function VerificationProgress({ currentStep }: VerificationProgressProps) {
     const steps = [
         { id: 'received', icon: Server, label: 'Received' },
         { id: 'processing', icon: FileCheck, label: 'Processing' },
+        { id: 'antiGreyListing', icon: Shield, label: 'Anti-Greylisting' },
         { id: 'complete', icon: CheckCircle2, label: 'Complete' }
     ];
 

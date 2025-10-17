@@ -4,10 +4,12 @@
  */
 
 import { ArrowLeft } from 'lucide-react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout';
 import { Button } from '../components/ui/Button';
 import { ResultAnalysis } from '../components/results/ResultAnalysis';
 import { ResultsList } from '../components/results/ResultsList';
+import { useAuth } from '../hooks';
 import type { User } from '../contexts/AuthContext';
 
 
@@ -19,10 +21,10 @@ export interface EmailVerificationResult {
 }
 
 
-// Interface for component props
+// Interface for component props (for backward compatibility when used as component)
 interface VerificationResultsPageProps {
-    results: EmailVerificationResult[];
-    onBack: () => void;
+    results?: EmailVerificationResult[];
+    onBack?: () => void;
     user?: User;
     onLogout?: () => Promise<void>;
 }
@@ -30,10 +32,61 @@ interface VerificationResultsPageProps {
 
 /**
  * Verification Results Page Component
- * @param props - Component props
+ * @param props - Component props (optional, for backward compatibility)
  * @returns JSX element
  */
-export function VerificationResultsPage({ results, onBack, user, onLogout }: VerificationResultsPageProps) {
+export function VerificationResultsPage({
+    results: propsResults,
+    onBack: propsOnBack,
+    user: propsUser,
+    onLogout: propsOnLogout
+}: VerificationResultsPageProps = {}) {
+    const navigate = useNavigate();
+    const { jobId: _jobId } = useParams<{ jobId: string }>();
+    const location = useLocation();
+    const { user: authUser, logout: authLogout } = useAuth();
+
+
+    // Use props if provided (component mode), otherwise use hooks (route mode)
+    const user = propsUser || authUser;
+    const onLogout = propsOnLogout || authLogout;
+
+
+    // Get results from props or location state
+    const locationState = location.state as { results?: EmailVerificationResult[] } | undefined;
+    const results = propsResults || locationState?.results || [];
+
+
+    // Handle back navigation
+    const handleBack = () => {
+        try {
+            if (propsOnBack) {
+                // Component mode - use provided callback
+                propsOnBack();
+            } else {
+                // Route mode - navigate to dashboard
+                navigate('/dashboard', { replace: true });
+            }
+        } catch (error) {
+            console.error('Back navigation error:', error);
+        }
+    };
+
+
+    // Handle logout
+    const handleLogout = async () => {
+        try {
+            if (onLogout) {
+                await onLogout();
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            console.debug('Logout handler completed');
+        }
+    };
+
+
     try {
         // Calculate stats
         const totalEmails = results.length;
@@ -53,8 +106,8 @@ export function VerificationResultsPage({ results, onBack, user, onLogout }: Ver
 
         return (
             <DashboardLayout
-                user={user}
-                onLogout={onLogout}
+                user={user || undefined}
+                onLogout={handleLogout}
             >
                 <div className="px-4 sm:px-6 lg:px-8 py-8">
                     {/* Header with back button */}
@@ -63,7 +116,7 @@ export function VerificationResultsPage({ results, onBack, user, onLogout }: Ver
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={onBack}
+                                onClick={handleBack}
                                 className="flex items-center space-x-1 cursor-pointer"
                             >
                                 <ArrowLeft className="h-4 w-4" />
@@ -93,8 +146,8 @@ export function VerificationResultsPage({ results, onBack, user, onLogout }: Ver
 
         return (
             <DashboardLayout
-                user={user}
-                onLogout={onLogout}
+                user={user || undefined}
+                onLogout={handleLogout}
             >
                 <div className="flex items-center justify-center min-h-[400px]">
                     <div className="text-center space-y-4 p-8">
@@ -105,7 +158,7 @@ export function VerificationResultsPage({ results, onBack, user, onLogout }: Ver
                             Unable to display verification results. Please try again.
                         </p>
                         <Button
-                            onClick={onBack}
+                            onClick={handleBack}
                             variant="primary"
                             className="cursor-pointer"
                         >

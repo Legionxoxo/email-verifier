@@ -206,6 +206,7 @@ function startServer() {
 		// Start the server
 		app.listen(port, () => {
 			console.log(`\n🚀 Server is running on port ${port}`);
+			console.log(`🎞️ Frontend is running on: http://localhost:${port}`);
 			console.log(`📚 API Documentation: http://localhost:${port}/api/health`);
 			console.log(`🔐 Authentication API: http://localhost:${port}/api/auth/health`);
 			console.log(`⚙️  Settings API: http://localhost:${port}/api/settings/health`);

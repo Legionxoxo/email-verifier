@@ -12,7 +12,6 @@ import { parseCSVFullData, validateCSVFile, type CSVFullDataResult } from '../..
 import { BulkVerifierStepOne } from './BulkVerifierStepOne';
 import { BulkVerifierStepTwo } from './BulkVerifierStepTwo';
 import { Button } from '../ui/Button';
-import { VerificationProgress, type VerificationStep } from '../ui';
 
 
 // Interface for component props
@@ -25,7 +24,7 @@ interface BulkVerifierProps {
 
 
 // Step types
-type VerifierStep = 'upload' | 'preview' | 'column-select' | 'verifying';
+type VerifierStep = 'upload' | 'preview' | 'column-select';
 
 
 /**
@@ -46,11 +45,11 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
     };
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
+    const [isVerifying, setIsVerifying] = useState<boolean>(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<CSVFullDataResult | null>(null);
     const [listName, setListName] = useState<string>('');
     const [error, setError] = useState<string>('');
-    const [verificationStep, setVerificationStep] = useState<VerificationStep>('received');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
 
@@ -269,37 +268,33 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
                 emailCount: emails.length
             });
 
-            // Change to verifying step
-            changeStep('verifying');
-            setVerificationStep('received');
+            // Disable button immediately to prevent multiple clicks
+            setIsVerifying(true);
 
-            // Step 1: Request received
-            await new Promise(resolve => setTimeout(resolve, 800));
-            setVerificationStep('processing');
-
-            // Step 2: Processing
-            // Call upload handler if provided
+            // Call upload handler - this will navigate to the progress page
+            // Do NOT reset isVerifying since we're navigating away
             if (onUpload) {
                 console.log('Calling onUpload callback with emails array (length:', emails.length, ')');
                 await onUpload(emails);
                 console.log('onUpload callback completed');
             } else {
                 console.log('No onUpload callback provided');
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                toast.success(`${emails.length} email(s) verified successfully!`);
+                // Reset state only for fallback case
+                setIsVerifying(false);
             }
 
-            // Step 3: Complete
-            setVerificationStep('complete');
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            toast.success(`${emails.length} email(s) verified successfully!`);
-
-            // Reset to upload step after successful verification
-            clearFile();
+            // Reset to upload step after successful verification (only for fallback)
+            if (!onUpload) {
+                clearFile();
+            }
 
         } catch (error) {
             console.error('Verification error:', error);
             toast.error('Failed to verify emails');
+            // Reset state on error
+            setIsVerifying(false);
             changeStep('column-select'); // Go back to column select on error
         }
     };
@@ -464,21 +459,8 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
                 <BulkVerifierStepTwo
                     parsedData={parsedData}
                     onVerify={handleStepTwoVerify}
+                    isVerifying={isVerifying}
                 />
-            </div>
-        );
-    };
-
-
-    /**
-     * Render verifying step
-     */
-    const renderVerifyingStep = () => {
-        return (
-            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-center min-h-[400px]">
-                    <VerificationProgress currentStep={verificationStep} />
-                </div>
             </div>
         );
     };
@@ -490,8 +472,6 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
             return renderPreviewStep();
         case 'column-select':
             return renderColumnSelectStep();
-        case 'verifying':
-            return renderVerifyingStep();
         default:
             return renderUploadStep();
     }

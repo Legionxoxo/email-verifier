@@ -19,7 +19,9 @@ import {
     PaymentPage,
     SettingsPage,
     APITokenPage,
-    HistoryPage
+    HistoryPage,
+    VerificationProgressPage,
+    VerificationResultsPage
 } from './pages';
 
 
@@ -155,9 +157,27 @@ export default function App() {
                                 }
                             />
 
+                            <Route
+                                path="/verify/:jobId"
+                                element={
+                                    <ProtectedRoute>
+                                        <VerificationProgressPage />
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/results/:jobId"
+                                element={
+                                    <ProtectedRoute>
+                                        <VerificationResultsPage />
+                                    </ProtectedRoute>
+                                }
+                            />
+
                             {/* Redirect /subscription to /billing for backward compatibility */}
-                            <Route 
-                                path="/subscription" 
+                            <Route
+                                path="/subscription"
                                 element={<Navigate to="/billing" replace />}
                             />
 
