@@ -103,11 +103,10 @@ router.post('/signup/resend',
 /**
  * POST /api/auth/signup/verify
  * Verify email during signup process and complete account setup
- * 
+ *
  * Security features:
  * - OTP validation with attempt limits
  * - Automatic account verification
- * - Razorpay customer creation
  * - Automatic user login after verification
  */
 router.post('/signup/verify',

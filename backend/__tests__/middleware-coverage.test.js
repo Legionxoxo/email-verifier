@@ -122,7 +122,7 @@ describe('Middleware Files Coverage Tests', () => {
                 const securityMiddleware = require('../functions/middleware/security');
                 expect(securityMiddleware).toHaveProperty('generalRateLimit');
                 expect(securityMiddleware).toHaveProperty('authRateLimit');
-                expect(securityMiddleware).toHaveProperty('subscriptionRateLimit');
+                expect(securityMiddleware).toHaveProperty('passwordResetRateLimit');
             } catch (error) {
                 throw error;
             } finally {
@@ -135,7 +135,7 @@ describe('Middleware Files Coverage Tests', () => {
                 const securityMiddleware = require('../functions/middleware/security');
                 expect(typeof securityMiddleware.generalRateLimit).toBe('function');
                 expect(typeof securityMiddleware.authRateLimit).toBe('function');
-                expect(typeof securityMiddleware.subscriptionRateLimit).toBe('function');
+                expect(typeof securityMiddleware.passwordResetRateLimit).toBe('function');
             } catch (error) {
                 throw error;
             } finally {
@@ -185,7 +185,7 @@ describe('Middleware Files Coverage Tests', () => {
 
                 // Check that all expected middleware are exported
                 const expectedAuthMiddleware = ['authenticateToken', 'verifyUserExists'];
-                const expectedSecurityMiddleware = ['generalRateLimit', 'authRateLimit', 'subscriptionRateLimit'];
+                const expectedSecurityMiddleware = ['generalRateLimit', 'authRateLimit', 'passwordResetRateLimit'];
 
                 expectedAuthMiddleware.forEach(middleware => {
                     expect(authMiddleware).toHaveProperty(middleware);

@@ -36,12 +36,10 @@ export function BulkVerifierStepTwo({
         uniqueCount: number;
         errors: number;
         duplicates: number;
-        creditsRequired: number;
     }>({
         uniqueCount: 0,
         errors: 0,
-        duplicates: 0,
-        creditsRequired: 0
+        duplicates: 0
     });
 
 
@@ -57,8 +55,7 @@ export function BulkVerifierStepTwo({
                 setEmailStats({
                     uniqueCount: emails.length,
                     errors,
-                    duplicates: duplicateCount,
-                    creditsRequired: emails.length
+                    duplicates: duplicateCount
                 });
             }
         } catch (error) {

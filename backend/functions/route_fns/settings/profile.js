@@ -35,10 +35,10 @@ async function handleGetProfile(req, res) {
         const db = getDatabase();
         
         // Get user profile data
-        const user = /** @type {{id: number, first_name: string, last_name: string, email: string, is_verified: number, razorpay_customer_id: string, created_at: string, updated_at: string} | undefined} */ (db.prepare(`
-            SELECT id, first_name, last_name, email, is_verified, 
-                   razorpay_customer_id, created_at, updated_at
-            FROM users 
+        const user = /** @type {{id: number, first_name: string, last_name: string, email: string, is_verified: number, created_at: string, updated_at: string} | undefined} */ (db.prepare(`
+            SELECT id, first_name, last_name, email, is_verified,
+                   created_at, updated_at
+            FROM users
             WHERE id = ?
         `).get(userId));
         
@@ -57,7 +57,6 @@ async function handleGetProfile(req, res) {
             lastName: user.last_name || '',
             email: user.email,
             isVerified: Boolean(user.is_verified),
-            hasRazorpayCustomer: Boolean(user.razorpay_customer_id),
             createdAt: user.created_at,
             updatedAt: user.updated_at,
             profileCompleteness: calculateProfileCompleteness(user)
@@ -275,13 +274,12 @@ async function handleUpdateProfile(req, res) {
 /**
  * Calculate profile completeness percentage
  * Helps users understand how complete their profile is
- * 
+ *
  * @param {Object} user - User data object
  * @param {string} user.first_name - User's first name
  * @param {string} user.last_name - User's last name
  * @param {string} user.email - User's email
  * @param {number} user.is_verified - User's verification status
- * @param {string} [user.razorpay_customer_id] - User's Razorpay customer ID
  * @returns {Object} Profile completeness data
  */
 function calculateProfileCompleteness(user) {

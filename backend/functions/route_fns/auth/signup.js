@@ -99,8 +99,8 @@ async function handleSignup(req, res) {
             
             // Hash password securely
             const passwordHash = await hashPassword(password);
-            
-            // Create user as unverified (Razorpay customer will be created after email verification)
+
+            // Create user as unverified
             const insertUser = db.prepare(`
                 INSERT INTO users (first_name, last_name, email, password_hash, is_verified)
                 VALUES (?, ?, ?, ?, ?)
