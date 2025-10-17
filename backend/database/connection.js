@@ -203,6 +203,7 @@ function createTables(db) {
                 request_type TEXT CHECK(request_type IN ('single', 'csv', 'api')) NOT NULL,
                 emails TEXT NOT NULL,
                 results TEXT,
+                statistics TEXT,
                 status TEXT CHECK(status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,

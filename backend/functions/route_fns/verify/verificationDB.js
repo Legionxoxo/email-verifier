@@ -12,6 +12,7 @@ const { getDb } = require('../../../database/connection');
  * @property {string} request_type
  * @property {string} emails - JSON string array
  * @property {string | null} results - JSON string array or null
+ * @property {string | null} statistics - JSON string object or null
  * @property {string} status
  * @property {number} created_at
  * @property {number} updated_at
@@ -102,9 +103,9 @@ async function updateVerificationStatus(verification_request_id, status) {
 
 
 /**
- * Update verification request with results
+ * Update verification request with results and calculate statistics
  * @param {string} verification_request_id - Verification request ID
- * @param {Array<Object>} results - Verification results array
+ * @param {Array<{email: string, status: string, message: string}>} results - Verification results array
  * @returns {Promise<{success: boolean, message: string}>}
  */
 async function updateVerificationResults(verification_request_id, results) {
@@ -112,13 +113,34 @@ async function updateVerificationResults(verification_request_id, results) {
 		const db = getDb();
 		const now = Date.now();
 
+		// Calculate statistics once
+		const statistics = {
+			valid: 0,
+			invalid: 0,
+			catch_all: 0,
+			unknown: 0,
+		};
+
+		for (const result of results) {
+			const status = result.status.toLowerCase().replace('-', '_');
+			if (status === 'valid') {
+				statistics.valid++;
+			} else if (status === 'invalid') {
+				statistics.invalid++;
+			} else if (status === 'catch_all' || status === 'catchall') {
+				statistics.catch_all++;
+			} else if (status === 'unknown') {
+				statistics.unknown++;
+			}
+		}
+
 		const stmt = db.prepare(`
             UPDATE verification_requests
-            SET results = ?, status = 'completed', completed_at = ?, updated_at = ?
+            SET results = ?, statistics = ?, status = 'completed', completed_at = ?, updated_at = ?
             WHERE verification_request_id = ?
         `);
 
-		stmt.run(JSON.stringify(results), now, now, verification_request_id);
+		stmt.run(JSON.stringify(results), JSON.stringify(statistics), now, now, verification_request_id);
 
 		return {
 			success: true,
@@ -165,6 +187,7 @@ async function getVerificationRequest(verification_request_id) {
 			request_type: row.request_type,
 			emails: JSON.parse(row.emails),
 			results: row.results ? JSON.parse(row.results) : null,
+			statistics: row.statistics ? JSON.parse(row.statistics) : null,
 			status: row.status,
 			created_at: row.created_at,
 			updated_at: row.updated_at,

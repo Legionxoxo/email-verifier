@@ -151,18 +151,25 @@ async function getVerificationStatus(req, res) {
 
 		// If already completed, return stored results
 		if (verificationRequest.status === 'completed') {
+			const responseData = {
+				verification_request_id: verificationRequest.verification_request_id,
+				request_type: verificationRequest.request_type,
+				status: verificationRequest.status,
+				emails: verificationRequest.emails,
+				results: verificationRequest.results,
+				created_at: verificationRequest.created_at,
+				updated_at: verificationRequest.updated_at,
+				completed_at: verificationRequest.completed_at,
+			};
+
+			// Add statistics if available
+			if (verificationRequest.statistics) {
+				responseData.statistics = verificationRequest.statistics;
+			}
+
 			return res.json({
 				success: true,
-				data: {
-					verification_request_id: verificationRequest.verification_request_id,
-					request_type: verificationRequest.request_type,
-					status: verificationRequest.status,
-					emails: verificationRequest.emails,
-					results: verificationRequest.results,
-					created_at: verificationRequest.created_at,
-					updated_at: verificationRequest.updated_at,
-					completed_at: verificationRequest.completed_at,
-				},
+				data: responseData,
 			});
 		}
 
@@ -204,8 +211,29 @@ async function getVerificationStatus(req, res) {
 					return { email: result.email, status, message };
 				});
 
-				// Update database with results
+				// Update database with results (statistics are calculated inside this function)
 				await updateVerificationResults(verification_request_id, resultsArray);
+
+				// Calculate statistics for response
+				const statistics = {
+					valid: 0,
+					invalid: 0,
+					catch_all: 0,
+					unknown: 0,
+				};
+
+				for (const result of resultsArray) {
+					const status = result.status.toLowerCase().replace('-', '_');
+					if (status === 'valid') {
+						statistics.valid++;
+					} else if (status === 'invalid') {
+						statistics.invalid++;
+					} else if (status === 'catch_all' || status === 'catchall') {
+						statistics.catch_all++;
+					} else if (status === 'unknown') {
+						statistics.unknown++;
+					}
+				}
 
 				// Return updated results
 				return res.json({
@@ -216,6 +244,7 @@ async function getVerificationStatus(req, res) {
 						status: 'completed',
 						emails: verificationRequest.emails,
 						results: resultsArray,
+						statistics: statistics,
 						created_at: verificationRequest.created_at,
 						completed_at: Date.now(),
 					},
