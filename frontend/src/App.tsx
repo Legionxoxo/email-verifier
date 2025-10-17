@@ -138,7 +138,7 @@ export default function App() {
                             />
 
                             <Route
-                                path="/verify/:jobId"
+                                path="/verify/:verificationRequestId"
                                 element={
                                     <ProtectedRoute>
                                         <VerificationProgressPage />
@@ -147,7 +147,7 @@ export default function App() {
                             />
 
                             <Route
-                                path="/results/:jobId"
+                                path="/results/:verificationRequestId"
                                 element={
                                     <ProtectedRoute>
                                         <VerificationResultsPage />

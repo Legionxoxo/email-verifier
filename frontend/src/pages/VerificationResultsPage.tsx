@@ -3,13 +3,15 @@
  * Displays verification results with analysis and detailed email list
  */
 
+import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout';
 import { Button } from '../components/ui/Button';
 import { ResultAnalysis } from '../components/results/ResultAnalysis';
 import { ResultsList } from '../components/results/ResultsList';
 import { useAuth } from '../hooks';
+import { verificationApi } from '../lib/api';
 import type { User } from '../contexts/AuthContext';
 
 
@@ -42,19 +44,57 @@ export function VerificationResultsPage({
     onLogout: propsOnLogout
 }: VerificationResultsPageProps = {}) {
     const navigate = useNavigate();
-    const { jobId: _jobId } = useParams<{ jobId: string }>();
-    const location = useLocation();
+    const { verificationRequestId } = useParams<{ verificationRequestId: string }>();
     const { user: authUser, logout: authLogout } = useAuth();
 
+    // State for fetched results
+    const [results, setResults] = useState<EmailVerificationResult[]>(propsResults || []);
+    const [loading, setLoading] = useState<boolean>(!propsResults);
+    const [error, setError] = useState<string>('');
 
     // Use props if provided (component mode), otherwise use hooks (route mode)
     const user = propsUser || authUser;
     const onLogout = propsOnLogout || authLogout;
 
 
-    // Get results from props or location state
-    const locationState = location.state as { results?: EmailVerificationResult[] } | undefined;
-    const results = propsResults || locationState?.results || [];
+    // Fetch results from API if not provided via props
+    useEffect(() => {
+        if (propsResults || !verificationRequestId) return;
+
+        const fetchResults = async () => {
+            try {
+                setLoading(true);
+                setError('');
+
+                console.log('Fetching verification results for:', verificationRequestId);
+
+                const details = await verificationApi.getVerificationDetails(verificationRequestId);
+                console.log('Verification details:', details);
+
+                if (details.status !== 'completed') {
+                    setError('Verification is not completed yet');
+                    return;
+                }
+
+                // Map API results to local format
+                const mappedResults: EmailVerificationResult[] = (details.results || []).map(r => ({
+                    email: r.email,
+                    status: r.status,
+                    reason: r.message
+                }));
+
+                setResults(mappedResults);
+
+            } catch (error) {
+                console.error('Failed to fetch results:', error);
+                setError(error instanceof Error ? error.message : 'Failed to load results');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchResults();
+    }, [verificationRequestId, propsResults]);
 
 
     // Handle back navigation
@@ -88,6 +128,53 @@ export function VerificationResultsPage({
 
 
     try {
+        // Show loading state
+        if (loading) {
+            return (
+                <DashboardLayout
+                    user={user || undefined}
+                    onLogout={handleLogout}
+                >
+                    <div className="flex items-center justify-center min-h-[400px]">
+                        <div className="text-center space-y-4 p-8">
+                            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto" />
+                            <p className="text-lg font-medium text-gray-900">
+                                Loading results...
+                            </p>
+                        </div>
+                    </div>
+                </DashboardLayout>
+            );
+        }
+
+        // Show error state
+        if (error) {
+            return (
+                <DashboardLayout
+                    user={user || undefined}
+                    onLogout={handleLogout}
+                >
+                    <div className="flex items-center justify-center min-h-[400px]">
+                        <div className="text-center space-y-4 p-8">
+                            <p className="text-lg font-medium text-red-600">
+                                Failed to load results
+                            </p>
+                            <p className="text-sm text-gray-600">
+                                {error}
+                            </p>
+                            <Button
+                                onClick={handleBack}
+                                variant="primary"
+                                className="cursor-pointer"
+                            >
+                                Go Back
+                            </Button>
+                        </div>
+                    </div>
+                </DashboardLayout>
+            );
+        }
+
         // Calculate stats
         const totalEmails = results.length;
         const validCount = results.filter(r => r.status === 'valid').length;

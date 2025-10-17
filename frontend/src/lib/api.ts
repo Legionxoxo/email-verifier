@@ -731,3 +731,398 @@ export const authApi = {
         }
     },
 };
+
+
+// CSV Verification API Types
+
+/**
+ * CSV upload response interface
+ * Returned after successfully uploading a CSV file
+ */
+export interface CSVUploadResponse {
+    success: boolean;
+    csv_upload_id: string;
+    original_filename: string;
+    has_header: boolean;
+    preview: Record<string, string>[];
+    headers: string[];
+    row_count: number;
+    column_count: number;
+    file_size: number;
+    upload_status: 'uploaded' | 'detecting' | 'ready' | 'submitted';
+}
+
+/**
+ * Email column detection response interface
+ * Returned after detecting the email column in CSV
+ */
+export interface EmailDetectionResponse {
+    success: boolean;
+    csv_upload_id: string;
+    detected_column: string;
+    detected_column_index: number;
+    confidence: number;
+    column_scores: Record<string, number>;
+    upload_status: 'ready';
+    warning?: string;
+}
+
+/**
+ * CSV verification submission response interface
+ * Returned after submitting CSV for verification
+ */
+export interface CSVVerificationResponse {
+    success: boolean;
+    message: string;
+    csv_upload_id: string;
+    verification_request_id: string;
+    upload_status: 'submitted';
+    verification_status: 'pending' | 'processing' | 'completed' | 'failed';
+    total_emails: number;
+}
+
+/**
+ * Verification request details interface
+ * Contains full details of a verification request
+ */
+export interface VerificationRequest {
+    verification_request_id: string;
+    request_type: 'single' | 'csv' | 'api';
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    progress_step?: 'received' | 'processing' | 'antiGreyListing' | 'complete' | 'failed';
+    greylist_found?: boolean;
+    blacklist_found?: boolean;
+    emails?: string[];
+    results?: VerificationResult[];
+    statistics?: VerificationStatistics;
+    created_at: number;
+    updated_at?: number;
+    completed_at?: number;
+    csv_details?: CSVDetails;
+}
+
+/**
+ * CSV details interface
+ * Contains CSV-specific metadata
+ */
+export interface CSVDetails {
+    csv_upload_id: string;
+    original_filename: string;
+    row_count: number;
+    column_count: number;
+    has_header: boolean;
+    headers: string[];
+    selected_email_column: string;
+    detection_confidence: number;
+    download_url: string;
+}
+
+/**
+ * Verification result interface
+ * Contains the verification result for a single email
+ */
+export interface VerificationResult {
+    email: string;
+    status: 'valid' | 'invalid' | 'catch-all' | 'unknown';
+    message: string;
+}
+
+/**
+ * Verification statistics interface
+ * Contains aggregated statistics for verification results
+ */
+export interface VerificationStatistics {
+    total_emails: number;
+    valid: number;
+    invalid: number;
+    catch_all: number;
+    unknown: number;
+    percentages: {
+        valid: number;
+        invalid: number;
+        catch_all: number;
+        unknown: number;
+    };
+}
+
+/**
+ * Verification history item interface
+ * Summary of a verification request in history list
+ */
+export interface VerificationHistoryItem {
+    verification_request_id: string;
+    request_type: 'single' | 'csv' | 'api';
+    email_count: number;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    created_at: number;
+    updated_at: number;
+    completed_at?: number;
+}
+
+/**
+ * History response interface
+ * Paginated list of verification requests
+ */
+export interface HistoryResponse {
+    success: boolean;
+    requests: VerificationHistoryItem[];
+    total: number;
+    page: number;
+    per_page: number;
+}
+
+
+// CSV Verification API Operations
+
+/**
+ * CSV Verification API functions with comprehensive error handling
+ * Provides all CSV verification-related operations
+ */
+export const verificationApi = {
+    /**
+     * Upload CSV file for verification
+     * Uploads file, parses structure, generates preview
+     *
+     * @param {FormData} formData - FormData containing csvFile and hasHeader
+     * @returns {Promise<CSVUploadResponse>} Promise resolving to upload response
+     * @throws {Error} If file is invalid or upload fails
+     */
+    async uploadCSV(formData: FormData): Promise<CSVUploadResponse> {
+        try {
+            const response = await axiosPost<CSVUploadResponse>(
+                `${config.api.baseUrl}/api/verifier/csv/upload`,
+                formData,
+                {
+                    headers: {
+                        ...getAuthHeaders(),
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'CSV upload failed');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'CSV upload failed';
+            const statusCode = (error as any)?.status;
+            const validationErrors = (error as any)?.validationErrors;
+            throw new Error(formatErrorMessage(message, statusCode, validationErrors));
+        }
+    },
+
+    /**
+     * Detect email column in uploaded CSV
+     * Analyzes CSV to find column containing emails
+     *
+     * @param {string} csvUploadId - CSV upload ID
+     * @returns {Promise<EmailDetectionResponse>} Promise resolving to detection results
+     * @throws {Error} If detection fails
+     */
+    async detectEmailColumn(csvUploadId: string): Promise<EmailDetectionResponse> {
+        try {
+            const response = await axiosPost<EmailDetectionResponse>(
+                `${config.api.baseUrl}/api/verifier/csv/detect-email`,
+                { csv_upload_id: csvUploadId },
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Email detection failed');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Email detection failed';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        }
+    },
+
+    /**
+     * Submit CSV for verification
+     * Extracts emails from selected column and queues for verification
+     *
+     * @param {string} csvUploadId - CSV upload ID
+     * @param {number} emailColumnIndex - Index of column containing emails
+     * @returns {Promise<CSVVerificationResponse>} Promise resolving to verification start confirmation
+     * @throws {Error} If submission fails
+     */
+    async submitCSVVerification(csvUploadId: string, emailColumnIndex: number): Promise<CSVVerificationResponse> {
+        try {
+            const response = await axiosPost<CSVVerificationResponse>(
+                `${config.api.baseUrl}/api/verifier/csv/verify`,
+                { csv_upload_id: csvUploadId, email_column_index: emailColumnIndex },
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Verification submission failed');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Verification submission failed';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        }
+    },
+
+    /**
+     * Get verification request details
+     * Retrieves full details of a verification request including results
+     *
+     * @param {string} verificationRequestId - Verification request ID
+     * @returns {Promise<VerificationRequest>} Promise resolving to verification details
+     * @throws {Error} If request not found or retrieval fails
+     */
+    async getVerificationDetails(verificationRequestId: string): Promise<VerificationRequest> {
+        try {
+            const response = await axiosGet<VerificationRequest>(
+                `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}`,
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to get verification details');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to get verification details';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        }
+    },
+
+    /**
+     * Get verification history
+     * Retrieves paginated list of all verification requests
+     *
+     * @param {Object} params - Query parameters
+     * @param {number} params.page - Page number (default: 1)
+     * @param {number} params.per_page - Items per page (default: 50)
+     * @param {string} params.type - Filter by request type
+     * @param {string} params.status - Filter by status
+     * @param {string} params.period - Filter by time period
+     * @returns {Promise<HistoryResponse>} Promise resolving to history list
+     * @throws {Error} If retrieval fails
+     */
+    async getHistory(params?: {
+        page?: number;
+        per_page?: number;
+        type?: 'single' | 'csv' | 'api';
+        status?: 'pending' | 'processing' | 'completed' | 'failed';
+        period?: 'this_month' | 'last_month' | 'last_6_months';
+    }): Promise<HistoryResponse> {
+        try {
+            const queryParams = new URLSearchParams();
+            if (params?.page) queryParams.append('page', params.page.toString());
+            if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+            if (params?.type) queryParams.append('type', params.type);
+            if (params?.status) queryParams.append('status', params.status);
+            if (params?.period) queryParams.append('period', params.period);
+
+            const url = `${config.api.baseUrl}/api/verifier/history${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+            const response = await axiosGet<HistoryResponse>(
+                url,
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to get history');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to get history';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        }
+    },
+
+    /**
+     * Download CSV results
+     * Downloads CSV file with verification results appended
+     *
+     * @param {string} csvUploadId - CSV upload ID
+     * @returns {Promise<Blob>} Promise resolving to CSV file blob
+     * @throws {Error} If download fails
+     */
+    async downloadCSVResults(csvUploadId: string): Promise<Blob> {
+        try {
+            const token = localStorage.getItem(config.auth.jwtStorageKey);
+
+            const response = await fetch(
+                `${config.api.baseUrl}/api/verifier/csv/${csvUploadId}/download`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Download failed with status ${response.status}`);
+            }
+
+            const blob = await response.blob();
+            return blob;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to download CSV results';
+            throw new Error(formatErrorMessage(message));
+        }
+    },
+
+    /**
+     * Verify single email address
+     * Submits a single email for verification
+     *
+     * @param {string} email - Email address to verify
+     * @returns {Promise<{ verification_request_id: string; message: string }>} Promise resolving to verification request ID
+     * @throws {Error} If verification fails
+     */
+    async verifySingleEmail(email: string): Promise<{ verification_request_id: string; message: string }> {
+        try {
+            const response = await axiosPost<{ verification_request_id: string; message: string }>(
+                `${config.api.baseUrl}/api/verifier/verify-single`,
+                { email },
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Single email verification failed');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Single email verification failed';
+            const statusCode = (error as any)?.status;
+            const validationErrors = (error as any)?.validationErrors;
+            throw new Error(formatErrorMessage(message, statusCode, validationErrors));
+        }
+    },
+};

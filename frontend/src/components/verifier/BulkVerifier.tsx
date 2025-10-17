@@ -8,7 +8,9 @@
 import { useState, useRef } from 'react';
 import { Download, X, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 import { parseCSVFullData, validateCSVFile, type CSVFullDataResult } from '../../lib/csvParser';
+import { verificationApi } from '../../lib/api';
 import { BulkVerifierStepOne } from './BulkVerifierStepOne';
 import { BulkVerifierStepTwo } from './BulkVerifierStepTwo';
 import { Button } from '../ui/Button';
@@ -16,7 +18,6 @@ import { Button } from '../ui/Button';
 
 // Interface for component props
 interface BulkVerifierProps {
-    onUpload?: (emails: string[]) => Promise<void>;
     maxFileSizeMB?: number;
     maxRows?: number;
     onStepChange?: (isUploadStep: boolean) => void;
@@ -32,7 +33,8 @@ type VerifierStep = 'upload' | 'preview' | 'column-select';
  * @param props - Component props
  * @returns JSX element
  */
-export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, onStepChange }: BulkVerifierProps) {
+export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChange }: BulkVerifierProps) {
+    const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState<VerifierStep>('upload');
 
 
@@ -48,13 +50,15 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
     const [isVerifying, setIsVerifying] = useState<boolean>(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<CSVFullDataResult | null>(null);
-    const [listName, setListName] = useState<string>('');
     const [error, setError] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+    // API-related state
+    const [csvUploadId, setCsvUploadId] = useState<string>('');
+
 
     /**
-     * Handle file selection and initial parsing
+     * Handle file selection and upload to backend
      */
     const handleFileSelect = async (file: File) => {
         try {
@@ -66,7 +70,7 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
             setIsProcessing(true);
             setError('');
 
-            // Validate file
+            // Validate file locally first
             console.log('Validating file...');
             const validation = validateCSVFile(file, maxFileSizeMB);
             console.log('Validation result:', validation);
@@ -78,34 +82,56 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
                 return;
             }
 
-            // Parse CSV for full data
-            console.log('Parsing CSV file...');
-            const result = await parseCSVFullData(file, true);
-            console.log('Parse result:', {
-                totalRows: result.totalRows,
-                headers: result.headers,
-                previewCount: result.preview.length
-            });
+            // Create FormData for upload
+            const formData = new FormData();
+            formData.append('csvFile', file);
+            formData.append('hasHeader', 'true');
+
+            // Upload to backend
+            console.log('Uploading CSV to backend...');
+            const uploadResponse = await verificationApi.uploadCSV(formData);
+            console.log('Upload response:', uploadResponse);
+
+            // Store upload ID
+            setCsvUploadId(uploadResponse.csv_upload_id);
+
+            // Convert backend response to local format for preview
+            const parsedData: CSVFullDataResult = {
+                headers: uploadResponse.headers,
+                rows: uploadResponse.preview,
+                preview: uploadResponse.preview,
+                totalRows: uploadResponse.row_count,
+                detectedEmailColumn: null
+            };
 
             // Check row limit
-            if (result.totalRows > maxRows) {
-                console.log('Row limit exceeded:', result.totalRows, '>', maxRows);
-                const errorMsg = `File contains ${result.totalRows} rows. Maximum allowed is ${maxRows.toLocaleString()}.`;
+            if (uploadResponse.row_count > maxRows) {
+                console.log('Row limit exceeded:', uploadResponse.row_count, '>', maxRows);
+                const errorMsg = `File contains ${uploadResponse.row_count} rows. Maximum allowed is ${maxRows.toLocaleString()}.`;
                 setError(errorMsg);
                 toast.error(errorMsg);
                 return;
             }
 
-            // Check if no rows found
-            if (result.totalRows === 0) {
-                setError('No data found in CSV file');
-                toast.error('No data found in CSV file');
-                return;
+            // Trigger email detection automatically
+            console.log('Detecting email column...');
+            const detectionResponse = await verificationApi.detectEmailColumn(uploadResponse.csv_upload_id);
+            console.log('Detection response:', detectionResponse);
+
+            parsedData.detectedEmailColumn = detectionResponse.detected_column;
+
+            // Show success message
+            if (detectionResponse.confidence >= 80) {
+                toast.success(`Email column "${detectionResponse.detected_column}" detected with ${detectionResponse.confidence.toFixed(0)}% confidence`);
+            } else if (detectionResponse.confidence >= 50) {
+                toast.info(`Email column "${detectionResponse.detected_column}" detected with ${detectionResponse.confidence.toFixed(0)}% confidence. Please verify.`);
+            } else {
+                toast.warning('Low confidence in email detection. Please manually select the email column.');
             }
 
             // Set file and parsed data
             setSelectedFile(file);
-            setParsedData(result);
+            setParsedData(parsedData);
             changeStep('preview');
 
             console.log('=== BULK CSV UPLOAD COMPLETED ===');
@@ -117,6 +143,7 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
             toast.error(errorMessage);
             setSelectedFile(null);
             setParsedData(null);
+            setCsvUploadId('');
         } finally {
             setIsProcessing(false);
         }
@@ -209,8 +236,8 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
         try {
             setSelectedFile(null);
             setParsedData(null);
-            setListName('');
             setError('');
+            setCsvUploadId('');
             changeStep('upload');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
@@ -246,9 +273,8 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
     /**
      * Handle step one completion (preview -> column select)
      */
-    const handleStepOneNext = async (name: string) => {
+    const handleStepOneNext = async () => {
         try {
-            setListName(name);
             changeStep('column-select');
         } catch (error) {
             console.error('Step one next error:', error);
@@ -258,12 +284,12 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
 
 
     /**
-     * Handle step two completion (verify emails)
+     * Handle step two completion (submit verification to backend)
      */
     const handleStepTwoVerify = async (emails: string[], selectedColumn: string) => {
         try {
-            console.log('Verifying emails:', {
-                listName,
+            console.log('Submitting CSV for verification:', {
+                csvUploadId,
                 selectedColumn,
                 emailCount: emails.length
             });
@@ -271,31 +297,29 @@ export function BulkVerifier({ onUpload, maxFileSizeMB = 100, maxRows = 50000, o
             // Disable button immediately to prevent multiple clicks
             setIsVerifying(true);
 
-            // Call upload handler - this will navigate to the progress page
-            // Do NOT reset isVerifying since we're navigating away
-            if (onUpload) {
-                console.log('Calling onUpload callback with emails array (length:', emails.length, ')');
-                await onUpload(emails);
-                console.log('onUpload callback completed');
-            } else {
-                console.log('No onUpload callback provided');
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                toast.success(`${emails.length} email(s) verified successfully!`);
-                // Reset state only for fallback case
-                setIsVerifying(false);
+            // Get the column index from parsedData
+            const columnIndex = parsedData?.headers.indexOf(selectedColumn) ?? -1;
+            if (columnIndex === -1) {
+                throw new Error('Invalid column selection');
             }
 
-            // Reset to upload step after successful verification (only for fallback)
-            if (!onUpload) {
-                clearFile();
-            }
+            // Submit to backend API
+            const verificationResponse = await verificationApi.submitCSVVerification(csvUploadId, columnIndex);
+            console.log('Verification response:', verificationResponse);
+
+            // Show success message
+            toast.success(`Verification started for ${verificationResponse.total_emails} emails!`);
+
+            // Navigate to verification details page
+            navigate(`/verify/${verificationResponse.verification_request_id}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to submit verification';
             console.error('Verification error:', error);
-            toast.error('Failed to verify emails');
+            toast.error(errorMessage);
             // Reset state on error
             setIsVerifying(false);
-            changeStep('column-select'); // Go back to column select on error
+            // Stay on column select step so user can try again
         }
     };
 

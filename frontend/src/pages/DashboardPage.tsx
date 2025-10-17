@@ -4,7 +4,6 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { DashboardLayout } from '../components/layout';
 import { SingleVerifier, BulkVerifier } from '../components/verifier';
@@ -18,7 +17,6 @@ import { useAuth } from '../hooks';
 export function DashboardPage() {
     try {
         const { user, logout } = useAuth();
-        const navigate = useNavigate();
         const [showSingleVerifier, setShowSingleVerifier] = React.useState(true);
         const [isSingleVerifying, setIsSingleVerifying] = React.useState(false);
 
@@ -35,54 +33,6 @@ export function DashboardPage() {
         };
 
 
-        // Handle single email verification
-        const handleSingleVerify = async (email: string) => {
-            try {
-                // Generate job ID
-                const jobId = `single_${Date.now()}`;
-
-                // Navigate to verification progress page with email data
-                // VerificationProgressPage will handle the simulation and generate mock results
-                navigate(`/verify/${jobId}`, {
-                    state: {
-                        type: 'single',
-                        emails: [email]
-                    }
-                });
-
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Verification failed';
-                console.error('Verification error:', error);
-                throw new Error(errorMessage);
-            } finally {
-                console.debug('Single verification completed');
-            }
-        };
-
-
-        // Handle bulk upload
-        const handleBulkUpload = async (emails: string[]) => {
-            try {
-                // Generate job ID
-                const jobId = `bulk_${Date.now()}`;
-
-                // Navigate to verification progress page with emails data
-                // VerificationProgressPage will handle the simulation and generate mock results
-                navigate(`/verify/${jobId}`, {
-                    state: {
-                        type: 'bulk',
-                        emails: emails
-                    }
-                });
-
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-                console.error('Bulk upload error:', error);
-                throw new Error(errorMessage);
-            } finally {
-                console.debug('Bulk upload completed');
-            }
-        };
 
 
         return (
@@ -101,7 +51,6 @@ export function DashboardPage() {
                                 transition={{ delay: 0.1 }}
                             >
                                 <SingleVerifier
-                                    onVerify={handleSingleVerify}
                                     onVerifyingChange={setIsSingleVerifying}
                                 />
                             </motion.div>
@@ -115,7 +64,6 @@ export function DashboardPage() {
                                 transition={{ delay: showSingleVerifier ? 0.2 : 0.1 }}
                             >
                                 <BulkVerifier
-                                    onUpload={handleBulkUpload}
                                     maxFileSizeMB={100}
                                     maxRows={50000}
                                     onStepChange={setShowSingleVerifier}

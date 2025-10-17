@@ -155,6 +155,7 @@ async function getVerificationStatus(req, res) {
 				verification_request_id: verificationRequest.verification_request_id,
 				request_type: verificationRequest.request_type,
 				status: verificationRequest.status,
+				progress_step: 'complete',
 				emails: verificationRequest.emails,
 				results: verificationRequest.results,
 				created_at: verificationRequest.created_at,
@@ -175,6 +176,25 @@ async function getVerificationStatus(req, res) {
 
 		// Check controller for updated status
 		const controllerStatus = await controller.getRequestStatus(verification_request_id);
+
+		// Map controller status to frontend progress steps
+		let progressStep = 'received';
+		if (controllerStatus) {
+			if (controllerStatus.status === 'completed') {
+				progressStep = 'complete';
+			} else if (controllerStatus.status === 'processing' || controllerStatus.verifying) {
+				// If greylist found, show anti-greylisting step
+				if (controllerStatus.greylist_found) {
+					progressStep = 'antiGreyListing';
+				} else {
+					progressStep = 'processing';
+				}
+			} else if (controllerStatus.status === 'failed') {
+				progressStep = 'failed';
+			} else if (controllerStatus.status === 'queued') {
+				progressStep = 'received';
+			}
+		}
 
 		if (controllerStatus && controllerStatus.status === 'completed') {
 			// Get results from controller
@@ -242,6 +262,7 @@ async function getVerificationStatus(req, res) {
 						verification_request_id: verificationRequest.verification_request_id,
 						request_type: verificationRequest.request_type,
 						status: 'completed',
+						progress_step: 'complete',
 						emails: verificationRequest.emails,
 						results: resultsArray,
 						statistics: statistics,
@@ -252,13 +273,16 @@ async function getVerificationStatus(req, res) {
 			}
 		}
 
-		// Return current status
+		// Return current status with progress step
 		return res.json({
 			success: true,
 			data: {
 				verification_request_id: verificationRequest.verification_request_id,
 				request_type: verificationRequest.request_type,
 				status: verificationRequest.status,
+				progress_step: progressStep,
+				greylist_found: controllerStatus?.greylist_found || false,
+				blacklist_found: controllerStatus?.blacklist_found || false,
 				emails: verificationRequest.emails,
 				created_at: verificationRequest.created_at,
 			},

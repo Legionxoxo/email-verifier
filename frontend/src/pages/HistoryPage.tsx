@@ -14,23 +14,21 @@ import {
     Clock,
     XCircle,
     AlertCircle,
-    ArrowLeft
+    ArrowLeft,
+    FileText
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { toast } from 'react-toastify';
+import { verificationApi, type VerificationHistoryItem } from '../lib/api';
 
-type FilterPeriod = 'this-month' | 'last-month' | 'last-6-months';
-type VerificationStatus = 'completed' | 'processing' | 'failed';
+type FilterPeriod = 'this_month' | 'last_month' | 'last_6_months';
+type VerificationStatus = 'completed' | 'processing' | 'failed' | 'pending';
 
-interface VerificationExport {
-    id: string;
+interface VerificationExport extends VerificationHistoryItem {
     name: string;
-    date: string;
-    status: VerificationStatus;
-    totalEmails: number;
     validEmails: number;
-    downloadUrl?: string;
+    date: string;
 }
 
 /**
@@ -45,78 +43,48 @@ export function HistoryPage() {
     const [filteredExports, setFilteredExports] = React.useState<VerificationExport[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string>('');
-    const [selectedPeriod, setSelectedPeriod] = React.useState<FilterPeriod>('this-month');
+    const [selectedPeriod, setSelectedPeriod] = React.useState<FilterPeriod>('this_month');
     const [searchQuery, setSearchQuery] = React.useState('');
+    const [currentPage] = React.useState(1);
 
-    // Load exports on mount
+    // Load exports when period changes
     React.useEffect(() => {
         loadExports();
-    }, []);
+    }, [selectedPeriod, currentPage]);
 
-    // Filter exports when period or search changes
+    // Filter exports when search changes
     React.useEffect(() => {
         filterExports();
-    }, [exports, selectedPeriod, searchQuery]);
+    }, [exports, searchQuery]);
 
     const loadExports = async () => {
         try {
             setLoading(true);
             setError('');
 
-            // TODO: Replace with actual API call
-            // const response = await verificationApi.getExports();
-            // setExports(response);
+            // Call API with filters
+            const response = await verificationApi.getHistory({
+                page: currentPage,
+                per_page: 50,
+                period: selectedPeriod
+            });
 
-            // Mock data
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const mockExports: VerificationExport[] = [
-                {
-                    id: '1',
-                    name: 'emails_to_verify',
-                    date: new Date().toISOString(),
-                    status: 'completed',
-                    totalEmails: 1500,
-                    validEmails: 1342
-                },
-                {
-                    id: '2',
-                    name: 'client_email_list',
-                    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-                    status: 'completed',
-                    totalEmails: 850,
-                    validEmails: 792
-                },
-                {
-                    id: '3',
-                    name: 'marketing_leads',
-                    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-                    status: 'processing',
-                    totalEmails: 2500,
-                    validEmails: 0
-                },
-                {
-                    id: '4',
-                    name: 'old_database_cleanup',
-                    date: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(),
-                    status: 'completed',
-                    totalEmails: 5000,
-                    validEmails: 4127
-                },
-                {
-                    id: '5',
-                    name: 'failed_verification_batch',
-                    date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-                    status: 'failed',
-                    totalEmails: 300,
-                    validEmails: 0
-                }
-            ];
+            console.log('History response:', response);
 
-            setExports(mockExports);
+            // Map API response to local format
+            const mappedExports: VerificationExport[] = response.requests.map((item) => ({
+                ...item,
+                name: item.request_type === 'csv' ? `CSV Upload ${item.email_count} emails` : `Single Email Verification`,
+                validEmails: 0, // Will be calculated from results if available
+                date: new Date(item.created_at).toISOString()
+            }));
+
+            setExports(mappedExports);
 
         } catch (error) {
             console.error('Failed to load verification history:', error);
             setError(error instanceof Error ? error.message : 'Failed to load verification history');
+            setExports([]);
         } finally {
             setLoading(false);
         }
@@ -125,79 +93,69 @@ export function HistoryPage() {
     const filterExports = () => {
         let filtered = [...exports];
 
-        // Filter by period
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        filtered = filtered.filter(exp => {
-            const expDate = new Date(exp.date);
-            const expMonth = expDate.getMonth();
-            const expYear = expDate.getFullYear();
-
-            switch (selectedPeriod) {
-                case 'this-month':
-                    return expMonth === currentMonth && expYear === currentYear;
-                case 'last-month':
-                    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-                    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-                    return expMonth === lastMonth && expYear === lastMonthYear;
-                case 'last-6-months':
-                    const sixMonthsAgo = new Date(now);
-                    sixMonthsAgo.setMonth(now.getMonth() - 6);
-                    return expDate >= sixMonthsAgo;
-                default:
-                    return true;
-            }
-        });
-
-        // Filter by search query
+        // Period filtering is handled by API, only filter by search query here
         if (searchQuery.trim()) {
             filtered = filtered.filter(exp =>
-                exp.name.toLowerCase().includes(searchQuery.toLowerCase())
+                exp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                exp.verification_request_id.toLowerCase().includes(searchQuery.toLowerCase())
             );
         }
 
         setFilteredExports(filtered);
     };
 
-    const handleDownload = async (exportId: string) => {
+    const handleDownload = async (verificationRequestId: string) => {
         try {
-            const exp = exports.find(e => e.id === exportId);
-            if (!exp) return;
+            const exp = exports.find(e => e.verification_request_id === verificationRequestId);
+            if (!exp || exp.request_type !== 'csv') {
+                toast.error('Only CSV verifications can be downloaded');
+                return;
+            }
 
-            // TODO: Replace with actual API call
-            // const downloadUrl = await verificationApi.downloadExport(exportId);
-            // window.open(downloadUrl, '_blank');
+            // Get verification details to find csv_upload_id
+            const details = await verificationApi.getVerificationDetails(verificationRequestId);
+            if (!details.csv_details) {
+                toast.error('CSV details not found');
+                return;
+            }
 
-            // Mock download
-            toast.success(`Downloading ${exp.name}...`);
-            console.log('Download export:', exportId);
+            toast.info(`Downloading ${exp.name}...`);
+
+            // Download CSV results
+            const blob = await verificationApi.downloadCSVResults(details.csv_details.csv_upload_id);
+
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = details.csv_details.original_filename || `results_${verificationRequestId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            toast.success('Download started successfully');
 
         } catch (error) {
             console.error('Failed to download export:', error);
-            toast.error('Failed to download export');
+            toast.error(error instanceof Error ? error.message : 'Failed to download export');
         }
     };
 
-    const handleShare = async (exportId: string) => {
+    const handleShare = async (verificationRequestId: string) => {
         try {
-            const exp = exports.find(e => e.id === exportId);
-            if (!exp) return;
-
-            // TODO: Replace with actual API call
-            // const shareUrl = await verificationApi.getShareLink(exportId);
-            // navigator.clipboard.writeText(shareUrl);
-
-            // Mock share
-            const mockShareUrl = `${window.location.origin}/shared/${exportId}`;
-            await navigator.clipboard.writeText(mockShareUrl);
+            const shareUrl = `${window.location.origin}/verify/${verificationRequestId}`;
+            await navigator.clipboard.writeText(shareUrl);
             toast.success('Share link copied to clipboard');
 
         } catch (error) {
             console.error('Failed to share export:', error);
             toast.error('Failed to create share link');
         }
+    };
+
+    const handleViewDetails = (verificationRequestId: string) => {
+        navigate(`/verify/${verificationRequestId}`);
     };
 
     const handleBackNavigation = () => {
@@ -239,6 +197,8 @@ export function HistoryPage() {
                 return <CheckCircle className="h-5 w-5 text-green-600" />;
             case 'processing':
                 return <Clock className="h-5 w-5 text-blue-600" />;
+            case 'pending':
+                return <Clock className="h-5 w-5 text-yellow-600" />;
             case 'failed':
                 return <XCircle className="h-5 w-5 text-red-600" />;
         }
@@ -312,8 +272,8 @@ export function HistoryPage() {
                                 {/* Period Filter Tabs */}
                                 <div className="flex items-center space-x-2">
                                     <button
-                                        onClick={() => setSelectedPeriod('this-month')}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'this-month'
+                                        onClick={() => setSelectedPeriod('this_month')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'this_month'
                                             ? 'bg-gray-100 text-gray-900'
                                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                             }`}
@@ -321,8 +281,8 @@ export function HistoryPage() {
                                         This Month
                                     </button>
                                     <button
-                                        onClick={() => setSelectedPeriod('last-month')}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last-month'
+                                        onClick={() => setSelectedPeriod('last_month')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last_month'
                                             ? 'bg-gray-100 text-gray-900'
                                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                             }`}
@@ -330,8 +290,8 @@ export function HistoryPage() {
                                         Last Month
                                     </button>
                                     <button
-                                        onClick={() => setSelectedPeriod('last-6-months')}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last-6-months'
+                                        onClick={() => setSelectedPeriod('last_6_months')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last_6_months'
                                             ? 'bg-gray-100 text-gray-900'
                                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                             }`}
@@ -404,19 +364,26 @@ export function HistoryPage() {
                                         <tbody className="divide-y divide-gray-200">
                                             {filteredExports.map((exp) => (
                                                 <tr
-                                                    key={exp.id}
-                                                    className="hover:bg-gray-50 transition-colors"
+                                                    key={exp.verification_request_id}
+                                                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                                    onClick={() => handleViewDetails(exp.verification_request_id)}
                                                 >
                                                     <td className="px-6 py-4">
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {exp.name}
-                                                        </div>
-                                                        {exp.status === 'completed' && (
-                                                            <div className="text-xs text-gray-500 mt-1">
-                                                                {exp.validEmails.toLocaleString()} of{' '}
-                                                                {exp.totalEmails.toLocaleString()} valid
+                                                        <div className="flex items-center space-x-2">
+                                                            {exp.request_type === 'csv' ? (
+                                                                <FileText className="h-5 w-5 text-blue-600" />
+                                                            ) : (
+                                                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                                            )}
+                                                            <div>
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {exp.name}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500 mt-1">
+                                                                    {exp.email_count.toLocaleString()} email{exp.email_count !== 1 ? 's' : ''}
+                                                                </div>
                                                             </div>
-                                                        )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <span className="text-sm text-gray-700">
@@ -425,28 +392,36 @@ export function HistoryPage() {
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center space-x-2">
-                                                            {getStatusIcon(exp.status)}
+                                                            {getStatusIcon(exp.status as VerificationStatus)}
                                                             <span className="text-sm font-medium text-gray-900">
-                                                                {getStatusText(exp.status)}
+                                                                {getStatusText(exp.status as VerificationStatus)}
                                                             </span>
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center justify-end space-x-2">
+                                                            {exp.request_type === 'csv' && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDownload(exp.verification_request_id);
+                                                                    }}
+                                                                    disabled={exp.status !== 'completed'}
+                                                                    className="cursor-pointer text-[#4169E1] hover:bg-blue-50"
+                                                                    title="Download"
+                                                                >
+                                                                    <Download className="h-5 w-5" />
+                                                                </Button>
+                                                            )}
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => handleDownload(exp.id)}
-                                                                disabled={exp.status !== 'completed'}
-                                                                className="cursor-pointer text-[#4169E1] hover:bg-blue-50"
-                                                                title="Download"
-                                                            >
-                                                                <Download className="h-5 w-5" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => handleShare(exp.id)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleShare(exp.verification_request_id);
+                                                                }}
                                                                 disabled={exp.status !== 'completed'}
                                                                 className="cursor-pointer text-[#4169E1] hover:bg-blue-50"
                                                                 title="Share"

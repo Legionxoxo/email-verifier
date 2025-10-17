@@ -4,13 +4,14 @@
  */
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { verificationApi } from '../../lib/api';
 
 
 // Interface for component props
 interface SingleVerifierProps {
-    onVerify?: (email: string) => Promise<void>;
     onVerifyingChange?: (isVerifying: boolean) => void;
 }
 
@@ -20,7 +21,8 @@ interface SingleVerifierProps {
  * @param props - Component props
  * @returns JSX element
  */
-export function SingleVerifier({ onVerify, onVerifyingChange }: SingleVerifierProps) {
+export function SingleVerifier({ onVerifyingChange }: SingleVerifierProps) {
+    const navigate = useNavigate();
     const [email, setEmail] = useState<string>('');
     const [isVerifying, setIsVerifying] = useState<boolean>(false);
 
@@ -50,22 +52,14 @@ export function SingleVerifier({ onVerify, onVerifyingChange }: SingleVerifierPr
             setIsVerifying(true);
             if (onVerifyingChange) onVerifyingChange(true);
 
-            // Call verify function - this will navigate to the progress page
-            // Do NOT reset isVerifying since we're navigating away
-            if (onVerify) {
-                console.log('Calling onVerify callback with email:', email.toLowerCase().trim());
-                await onVerify(email.toLowerCase().trim());
-            } else {
-                // TODO: Implement actual verification API call
-                console.log('No onVerify callback, using mock verification');
-                console.log('Verifying email:', email);
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                toast.success('Email verified successfully!');
-                console.log('Mock verification completed');
-                // Reset state only for fallback case
-                setIsVerifying(false);
-                if (onVerifyingChange) onVerifyingChange(false);
-            }
+            // Call API to submit single email verification
+            const response = await verificationApi.verifySingleEmail(email.toLowerCase().trim());
+            console.log('Verification API response:', response);
+
+            toast.success('Verification started!');
+
+            // Navigate to verification progress page with the verification_request_id
+            navigate(`/verify/${response.verification_request_id}`);
 
             console.log('=== SINGLE EMAIL VERIFICATION COMPLETED ===');
 
