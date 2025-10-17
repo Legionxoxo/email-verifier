@@ -9,25 +9,11 @@ const path = require('path');
 const { validateEnvironment, PORT } = require('./data/env');
 const { initializeDatabase } = require('./database/connection');
 const { helmetConfig, corsConfig } = require('./functions/middleware/security');
-const { validatePlanConfiguration } = require('./functions/utils/validate-plans');
 const authRoutes = require('./routes/api/auth');
 const settingsRoutes = require('./routes/api/settings');
-const subscriptionRoutes = require('./routes/api/subscriptions');
-const webhookRoutes = require('./routes/api/webhooks');
-const subscriptionCleanupRoutes = require('./routes/api/subscription-cleanup');
 
 // Validate environment variables on startup
 validateEnvironment();
-
-// Validate subscription plan configuration on startup
-try {
-	validatePlanConfiguration();
-} catch (error) {
-	const errorMessage = error instanceof Error ? error.message : String(error);
-	console.error('❌ Server startup failed due to invalid plan configuration');
-	console.error('Error:', errorMessage);
-	process.exit(1);
-}
 
 // Server configuration
 const port = PORT;
@@ -110,15 +96,6 @@ function setupRoutes() {
 		// Settings routes
 		app.use('/api/settings', settingsRoutes);
 
-		// Subscription and payment routes
-		app.use('/api/subscriptions', subscriptionRoutes);
-
-		// Webhook routes for payment gateway integration
-		app.use('/api/webhooks', webhookRoutes);
-
-		// Subscription cleanup routes
-		app.use('/api/subscription-cleanup', subscriptionCleanupRoutes);
-
 		// API health check
 		app.get('/api/health', (req, res) => {
 			res.json({
@@ -127,10 +104,7 @@ function setupRoutes() {
 				services: {
 					database: 'connected',
 					authentication: 'active',
-					settings: 'active',
-					subscriptions: 'active',
-					webhooks: process.env.RAZORPAY_WEBHOOK_SECRET ? 'configured' : 'not_configured',
-					payments: process.env.RAZORPAY_KEY_ID ? 'configured' : 'not_configured',
+					settings: 'active'
 				},
 				timestamp: new Date().toISOString(),
 			});
@@ -210,9 +184,6 @@ function startServer() {
 			console.log(`📚 API Documentation: http://localhost:${port}/api/health`);
 			console.log(`🔐 Authentication API: http://localhost:${port}/api/auth/health`);
 			console.log(`⚙️  Settings API: http://localhost:${port}/api/settings/health`);
-			console.log(`💳 Subscription API: http://localhost:${port}/api/subscriptions/health`);
-			console.log(`📡 Webhook API: http://localhost:${port}/api/webhooks/health`);
-			console.log(`💰 Payment Gateway: ${process.env.RAZORPAY_KEY_ID ? 'Configured' : 'Not Configured'}`);
 			console.log(`⚡ Environment: ${process.env.NODE_ENV || 'development'}\n`);
 		});
 	} catch (error) {

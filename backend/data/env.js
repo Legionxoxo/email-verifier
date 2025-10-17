@@ -68,13 +68,6 @@ const CORS_ORIGIN = getEnvVar('CORS_ORIGIN', 'http://localhost:5173', false);
 const BCRYPT_ROUNDS = getEnvVar('BCRYPT_ROUNDS', '12', false);
 
 
-// Razorpay configuration
-
-const RAZORPAY_KEY_ID = getEnvVar('RAZORPAY_KEY_ID', '', true);
-const RAZORPAY_KEY_SECRET = getEnvVar('RAZORPAY_KEY_SECRET', '', true);
-const RAZORPAY_WEBHOOK_SECRET = getEnvVar('RAZORPAY_WEBHOOK_SECRET', '', true);
-
-
 /**
  * Validates all required environment variables
  * @returns {boolean} True if all required variables are present
@@ -84,10 +77,7 @@ function validateEnvironment() {
     try {
         const requiredVars = [
             'JWT_SECRET',
-            'JWT_REFRESH_SECRET',
-            'RAZORPAY_KEY_ID',
-            'RAZORPAY_KEY_SECRET',
-            'RAZORPAY_WEBHOOK_SECRET'
+            'JWT_REFRESH_SECRET'
         ];
         
         const missingVars = [];
@@ -137,16 +127,11 @@ module.exports = {
     // Rate limiting
     RATE_LIMIT_WINDOW_MS: parseInt(RATE_LIMIT_WINDOW_MS, 10),
     RATE_LIMIT_MAX: parseInt(RATE_LIMIT_MAX, 10),
-    
+
     // Security
     CORS_ORIGIN,
     BCRYPT_ROUNDS: parseInt(BCRYPT_ROUNDS, 10),
-    
-    // Razorpay
-    RAZORPAY_KEY_ID,
-    RAZORPAY_KEY_SECRET,
-    RAZORPAY_WEBHOOK_SECRET,
-    
+
     // Utilities
     getEnvVar,
     validateEnvironment
