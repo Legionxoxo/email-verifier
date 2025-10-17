@@ -80,8 +80,8 @@ async function getHistory(req, res) {
 		const db = getDb();
 		const offset = (page - 1) * per_page;
 
-		// Build WHERE clause
-		const whereClauses = ['user_id = ?'];
+		// Build WHERE clause with table prefixes
+		const whereClauses = ['v.user_id = ?'];
 		/** @type {Array<string | number>} */
 		const params = [user_id];
 
@@ -89,7 +89,7 @@ async function getHistory(req, res) {
 		if (period) {
 			const periodTimestamp = getPeriodTimestamp(period);
 			if (periodTimestamp > 0) {
-				whereClauses.push('created_at >= ?');
+				whereClauses.push('v.created_at >= ?');
 				params.push(periodTimestamp);
 			}
 		}
@@ -99,7 +99,7 @@ async function getHistory(req, res) {
 		// Get total count
 		const countStmt = db.prepare(`
             SELECT COUNT(*) as total
-            FROM verification_requests
+            FROM verification_requests v
             WHERE ${whereClause}
         `);
 		const countRow = /** @type {{total: number} | undefined} */ (countStmt.get(...params));

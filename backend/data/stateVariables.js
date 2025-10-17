@@ -7,6 +7,8 @@ const stateVariables = {
 	uuid, // When the uuid changes, will tell the controller that the code has been restarted
 	ping_freq: 10,
 	thread_num: 4,
+	mx_domain: process.env.MX_DOMAIN || '',
+	em_domain: process.env.EM_DOMAIN || '',
 };
 
 module.exports = stateVariables;

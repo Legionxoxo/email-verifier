@@ -55,6 +55,11 @@ module.exports = {
         '^.+\\.js$': 'babel-jest'
     },
 
+    // Transform uuid package from ES modules
+    transformIgnorePatterns: [
+        'node_modules/(?!(uuid)/)'
+    ],
+
     // Module paths
     moduleDirectories: ['node_modules', '<rootDir>'],
 
