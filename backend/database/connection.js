@@ -218,6 +218,7 @@ function createTables(db) {
                 csv_upload_id TEXT PRIMARY KEY,
                 verification_request_id TEXT,
                 user_id INTEGER NOT NULL,
+                list_name TEXT,
                 original_filename TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 file_size INTEGER NOT NULL,

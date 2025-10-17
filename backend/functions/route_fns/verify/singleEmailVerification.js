@@ -149,15 +149,32 @@ async function getVerificationStatus(req, res) {
 			});
 		}
 
-		// If already completed, return stored results
+		// If already completed, return stored results with pagination
 		if (verificationRequest.status === 'completed') {
+			// Get pagination parameters from query
+			const page = parseInt(String(req.query.page || '1')) || 1;
+			const perPage = parseInt(String(req.query.per_page || '50')) || 50;
+			const offset = (page - 1) * perPage;
+
+			// Parse results
+			const allResults = verificationRequest.results || [];
+			const totalResults = allResults.length;
+			const paginatedResults = allResults.slice(offset, offset + perPage);
+
 			const responseData = {
 				verification_request_id: verificationRequest.verification_request_id,
 				request_type: verificationRequest.request_type,
 				status: verificationRequest.status,
 				progress_step: 'complete',
 				emails: verificationRequest.emails,
-				results: verificationRequest.results,
+				results: paginatedResults,
+				pagination: {
+					page: page,
+					per_page: perPage,
+					total: totalResults,
+					total_pages: Math.ceil(totalResults / perPage),
+					has_more: offset + perPage < totalResults,
+				},
 				created_at: verificationRequest.created_at,
 				updated_at: verificationRequest.updated_at,
 				completed_at: verificationRequest.completed_at,
@@ -255,7 +272,14 @@ async function getVerificationStatus(req, res) {
 					}
 				}
 
-				// Return updated results
+				// Apply pagination
+				const page = parseInt(String(req.query.page || '1')) || 1;
+				const perPage = parseInt(String(req.query.per_page || '50')) || 50;
+				const offset = (page - 1) * perPage;
+				const totalResults = resultsArray.length;
+				const paginatedResults = resultsArray.slice(offset, offset + perPage);
+
+				// Return updated results with pagination
 				return res.json({
 					success: true,
 					data: {
@@ -264,7 +288,14 @@ async function getVerificationStatus(req, res) {
 						status: 'completed',
 						progress_step: 'complete',
 						emails: verificationRequest.emails,
-						results: resultsArray,
+						results: paginatedResults,
+						pagination: {
+							page: page,
+							per_page: perPage,
+							total: totalResults,
+							total_pages: Math.ceil(totalResults / perPage),
+							has_more: offset + perPage < totalResults,
+						},
 						statistics: statistics,
 						created_at: verificationRequest.created_at,
 						completed_at: Date.now(),

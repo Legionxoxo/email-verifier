@@ -794,6 +794,13 @@ export interface VerificationRequest {
     blacklist_found?: boolean;
     emails?: string[];
     results?: VerificationResult[];
+    pagination?: {
+        page: number;
+        per_page: number;
+        total: number;
+        total_pages: number;
+        has_more: boolean;
+    };
     statistics?: VerificationStatistics;
     created_at: number;
     updated_at?: number;
@@ -984,13 +991,21 @@ export const verificationApi = {
      * Retrieves full details of a verification request including results
      *
      * @param {string} verificationRequestId - Verification request ID
+     * @param {number} page - Page number for pagination (default: 1)
+     * @param {number} perPage - Results per page (default: 50)
      * @returns {Promise<VerificationRequest>} Promise resolving to verification details
      * @throws {Error} If request not found or retrieval fails
      */
-    async getVerificationDetails(verificationRequestId: string): Promise<VerificationRequest> {
+    async getVerificationDetails(verificationRequestId: string, page: number = 1, perPage: number = 50): Promise<VerificationRequest> {
         try {
+            const queryParams = new URLSearchParams();
+            queryParams.append('page', page.toString());
+            queryParams.append('per_page', perPage.toString());
+
+            const url = `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}?${queryParams.toString()}`;
+
             const response = await axiosGet<VerificationRequest>(
-                `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}`,
+                url,
                 { headers: getAuthHeaders() }
             );
 

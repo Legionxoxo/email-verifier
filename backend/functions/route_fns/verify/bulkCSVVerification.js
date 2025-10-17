@@ -23,6 +23,7 @@ const {
  * @property {string} csv_upload_id
  * @property {string | null} verification_request_id
  * @property {number} user_id
+ * @property {string | null} list_name
  * @property {string} original_filename
  * @property {string} file_path
  * @property {number} file_size
@@ -90,6 +91,7 @@ async function uploadCSV(req, res) {
 		const filePath = req.file?.path;
 		const originalFilename = req.originalFilename;
 		const hasHeader = req.body.hasHeader === 'true' || req.body.hasHeader === true;
+		const listName = req.body.listName || null;
 		const user_id = req.user?.id;
 
 		if (!user_id) {
@@ -173,14 +175,15 @@ async function uploadCSV(req, res) {
 
 		const stmt = db.prepare(`
             INSERT INTO csv_uploads
-            (csv_upload_id, user_id, original_filename, file_path, file_size,
+            (csv_upload_id, user_id, list_name, original_filename, file_path, file_size,
              has_header, headers, preview_data, row_count, column_count, upload_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
 		stmt.run(
 			csvUploadId,
 			user_id,
+			listName,
 			originalFilename,
 			filePath,
 			req.file.size,
@@ -198,6 +201,7 @@ async function uploadCSV(req, res) {
 			success: true,
 			data: {
 				csv_upload_id: csvUploadId,
+				list_name: listName,
 				original_filename: originalFilename,
 				has_header: hasHeader,
 				preview: preview,
@@ -403,6 +407,21 @@ async function submitCSVVerification(req, res) {
 
 		const filePath = upload.file_path;
 		const hasHeader = upload.has_header === 1;
+		const headers = JSON.parse(upload.headers);
+		const selectedColumn = headers[email_column_index];
+
+		// Update selected column in database (user might have changed it from auto-detected)
+		const columnUpdateTime = Date.now();
+		const updateColumnStmt = db.prepare(`
+            UPDATE csv_uploads
+            SET selected_email_column = ?,
+                selected_email_column_index = ?,
+                updated_at = ?
+            WHERE csv_upload_id = ?
+        `);
+
+		updateColumnStmt.run(selectedColumn, email_column_index, columnUpdateTime, csv_upload_id);
+
 		const stream = fs.createReadStream(filePath);
 
 		let rowIndex = 0;
@@ -455,7 +474,7 @@ async function submitCSVVerification(req, res) {
 		}
 
 		// Link CSV upload to verification request
-		const now = Date.now();
+		const linkUpdateTime = Date.now();
 		const linkStmt = db.prepare(`
             UPDATE csv_uploads
             SET verification_request_id = ?,
@@ -464,7 +483,7 @@ async function submitCSVVerification(req, res) {
             WHERE csv_upload_id = ?
         `);
 
-		linkStmt.run(verification_request_id, 'submitted', now, csv_upload_id);
+		linkStmt.run(verification_request_id, 'submitted', linkUpdateTime, csv_upload_id);
 
 		// Add to verification queue
 		const queueResult = await queue.add({
@@ -625,9 +644,13 @@ async function downloadCSVResults(req, res) {
 			});
 		});
 
-		// Download response
+		// Download response - use list_name if available, otherwise original_filename
+		const downloadFilename = upload.list_name
+			? `${upload.list_name}.csv`
+			: upload.original_filename;
+
 		res.setHeader('Content-Type', 'text/csv');
-		res.setHeader('Content-Disposition', `attachment; filename="${upload.original_filename}"`);
+		res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
 
 		const fileStream = fs.createReadStream(outputPath);
 		fileStream.pipe(res);

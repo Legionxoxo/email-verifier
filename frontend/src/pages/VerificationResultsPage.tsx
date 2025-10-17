@@ -51,13 +51,17 @@ export function VerificationResultsPage({
     const [results, setResults] = useState<EmailVerificationResult[]>(propsResults || []);
     const [loading, setLoading] = useState<boolean>(!propsResults);
     const [error, setError] = useState<string>('');
+    const [page, setPage] = useState<number>(1);
+    const [hasMore, setHasMore] = useState<boolean>(true);
+    const [isFetchingMore, setIsFetchingMore] = useState<boolean>(false);
+    const [csvUploadId, setCsvUploadId] = useState<string | undefined>(undefined);
 
     // Use props if provided (component mode), otherwise use hooks (route mode)
     const user = propsUser || authUser;
     const onLogout = propsOnLogout || authLogout;
 
 
-    // Fetch results from API if not provided via props
+    // Fetch initial results from API if not provided via props
     useEffect(() => {
         if (propsResults || !verificationRequestId) return;
 
@@ -85,6 +89,16 @@ export function VerificationResultsPage({
 
                 setResults(mappedResults);
 
+                // Check if there are more pages
+                if (details.pagination) {
+                    setHasMore(details.pagination.has_more);
+                }
+
+                // Store CSV upload ID if this is a CSV verification
+                if (details.request_type === 'csv' && details.csv_details) {
+                    setCsvUploadId(details.csv_details.csv_upload_id);
+                }
+
             } catch (error) {
                 console.error('Failed to fetch results:', error);
                 setError(error instanceof Error ? error.message : 'Failed to load results');
@@ -95,6 +109,60 @@ export function VerificationResultsPage({
 
         fetchResults();
     }, [verificationRequestId, propsResults]);
+
+
+    // Fetch more results when user scrolls
+    const fetchMoreResults = async () => {
+        if (isFetchingMore || !hasMore || !verificationRequestId) return;
+
+        try {
+            setIsFetchingMore(true);
+            const nextPage = page + 1;
+
+            console.log('Fetching more results, page:', nextPage);
+
+            const details = await verificationApi.getVerificationDetails(verificationRequestId, nextPage);
+
+            if (details.results && details.results.length > 0) {
+                const mappedResults: EmailVerificationResult[] = details.results.map(r => ({
+                    email: r.email,
+                    status: r.status,
+                    reason: r.message
+                }));
+
+                setResults(prev => [...prev, ...mappedResults]);
+                setPage(nextPage);
+
+                if (details.pagination) {
+                    setHasMore(details.pagination.has_more);
+                }
+            } else {
+                setHasMore(false);
+            }
+
+        } catch (error) {
+            console.error('Failed to fetch more results:', error);
+        } finally {
+            setIsFetchingMore(false);
+        }
+    };
+
+
+    // Scroll handler for infinite scroll
+    useEffect(() => {
+        const handleScroll = () => {
+            // Check if user has scrolled to 20% from bottom
+            const scrollPosition = window.innerHeight + window.scrollY;
+            const threshold = document.documentElement.scrollHeight * 0.8;
+
+            if (scrollPosition >= threshold && !isFetchingMore && hasMore) {
+                fetchMoreResults();
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [isFetchingMore, hasMore, page]);
 
 
     // Handle back navigation
@@ -221,7 +289,7 @@ export function VerificationResultsPage({
 
                         {/* Right column - Results List */}
                         <div>
-                            <ResultsList results={results} totalCount={totalEmails} />
+                            <ResultsList results={results} totalCount={totalEmails} csvUploadId={csvUploadId} />
                         </div>
                     </div>
                 </div>

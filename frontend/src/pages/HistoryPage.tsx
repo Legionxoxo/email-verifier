@@ -9,7 +9,6 @@ import { useNavigate } from 'react-router-dom';
 import {
     Search,
     Download,
-    Share2,
     CheckCircle,
     Clock,
     XCircle,
@@ -142,17 +141,6 @@ export function HistoryPage() {
         }
     };
 
-    const handleShare = async (verificationRequestId: string) => {
-        try {
-            const shareUrl = `${window.location.origin}/verify/${verificationRequestId}`;
-            await navigator.clipboard.writeText(shareUrl);
-            toast.success('Share link copied to clipboard');
-
-        } catch (error) {
-            console.error('Failed to share export:', error);
-            toast.error('Failed to create share link');
-        }
-    };
 
     const handleViewDetails = (verificationRequestId: string) => {
         navigate(`/verify/${verificationRequestId}`);
@@ -415,19 +403,6 @@ export function HistoryPage() {
                                                                     <Download className="h-5 w-5" />
                                                                 </Button>
                                                             )}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleShare(exp.verification_request_id);
-                                                                }}
-                                                                disabled={exp.status !== 'completed'}
-                                                                className="cursor-pointer text-[#4169E1] hover:bg-blue-50"
-                                                                title="Share"
-                                                            >
-                                                                <Share2 className="h-5 w-5" />
-                                                            </Button>
                                                         </div>
                                                     </td>
                                                 </tr>

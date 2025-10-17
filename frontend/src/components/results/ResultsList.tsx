@@ -13,6 +13,7 @@ import type { EmailVerificationResult } from '../../pages/VerificationResultsPag
 interface ResultsListProps {
     results: EmailVerificationResult[];
     totalCount: number;
+    csvUploadId?: string; // Optional CSV upload ID for backend download
 }
 
 
@@ -56,35 +57,32 @@ function getStatusIcon(status: string) {
 
 
 /**
- * Download results as CSV
+ * Download results as CSV from backend
+ * Backend generates enriched CSV with original data + verification results
  */
-function downloadCSV(results: EmailVerificationResult[]) {
+async function downloadCSV(csvUploadId: string | undefined) {
     try {
-        // Create CSV content
-        const headers = ['Email', 'Status', 'Reason'];
-        const rows = results.map(result => [
-            result.email,
-            result.status,
-            result.reason
-        ]);
+        if (!csvUploadId) {
+            console.error('No CSV upload ID available for download');
+            return;
+        }
 
-        const csvContent = [
-            headers.join(','),
-            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-        ].join('\n');
+        // Use backend API to download enriched CSV
+        const { verificationApi } = await import('../../lib/api');
+        const blob = await verificationApi.downloadCSVResults(csvUploadId);
 
-        // Create blob and download
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
+        // Create download link
         const url = URL.createObjectURL(blob);
-
+        const link = document.createElement('a');
         link.setAttribute('href', url);
-        link.setAttribute('download', `verification-results-${Date.now()}.csv`);
+        link.setAttribute('download', ''); // Filename comes from backend Content-Disposition header
         link.style.visibility = 'hidden';
 
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
+        URL.revokeObjectURL(url);
 
     } catch (error) {
         console.error('CSV download error:', error);
@@ -95,7 +93,7 @@ function downloadCSV(results: EmailVerificationResult[]) {
 /**
  * Results List Component
  */
-export function ResultsList({ results, totalCount }: ResultsListProps) {
+export function ResultsList({ results, totalCount, csvUploadId }: ResultsListProps) {
     return (
         <Card>
             <CardHeader>
@@ -107,7 +105,7 @@ export function ResultsList({ results, totalCount }: ResultsListProps) {
                     <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => downloadCSV(results)}
+                        onClick={() => downloadCSV(csvUploadId)}
                         className="cursor-pointer"
                     >
                         Download CSV

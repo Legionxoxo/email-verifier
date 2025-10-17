@@ -86,6 +86,9 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
             const formData = new FormData();
             formData.append('csvFile', file);
             formData.append('hasHeader', 'true');
+            // Use filename without extension as default list name
+            const defaultListName = file.name.replace('.csv', '');
+            formData.append('listName', defaultListName);
 
             // Upload to backend
             console.log('Uploading CSV to backend...');
@@ -272,9 +275,15 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
 
     /**
      * Handle step one completion (preview -> column select)
+     * Now receives listName from Step One
      */
-    const handleStepOneNext = async () => {
+    const handleStepOneNext = async (updatedListName: string) => {
         try {
+            // Note: listName was already sent during initial upload
+            // If user modified it in Step One, it's stored in backend
+            // We just proceed to column selection
+            console.log('List name from Step One:', updatedListName);
+
             changeStep('column-select');
         } catch (error) {
             console.error('Step one next error:', error);

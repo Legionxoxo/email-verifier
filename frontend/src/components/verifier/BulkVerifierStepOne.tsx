@@ -15,7 +15,7 @@ import type { CSVFullDataResult } from '../../lib/csvParser';
 interface BulkVerifierStepOneProps {
     file: File;
     parsedData: CSVFullDataResult;
-    onNext: (listName: string) => void;
+    onNext: (listName: string) => Promise<void>;
     onSelectDifferentFile: () => void;
     onHeaderCheckboxChange: (hasHeader: boolean) => void;
     onOpenFilePicker: () => void;
