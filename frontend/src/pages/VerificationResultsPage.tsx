@@ -55,6 +55,8 @@ export function VerificationResultsPage({
     const [hasMore, setHasMore] = useState<boolean>(true);
     const [isFetchingMore, setIsFetchingMore] = useState<boolean>(false);
     const [csvUploadId, setCsvUploadId] = useState<string | undefined>(undefined);
+    const [listName, setListName] = useState<string | null | undefined>(undefined);
+    const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
 
     // Use props if provided (component mode), otherwise use hooks (route mode)
     const user = propsUser || authUser;
@@ -94,9 +96,11 @@ export function VerificationResultsPage({
                     setHasMore(details.pagination.has_more);
                 }
 
-                // Store CSV upload ID if this is a CSV verification
+                // Store CSV details if this is a CSV verification
                 if (details.request_type === 'csv' && details.csv_details) {
                     setCsvUploadId(details.csv_details.csv_upload_id);
+                    setListName(details.csv_details.list_name);
+                    setOriginalFilename(details.csv_details.original_filename);
                 }
 
             } catch (error) {
@@ -289,7 +293,13 @@ export function VerificationResultsPage({
 
                         {/* Right column - Results List */}
                         <div>
-                            <ResultsList results={results} totalCount={totalEmails} csvUploadId={csvUploadId} />
+                            <ResultsList
+                                results={results}
+                                totalCount={totalEmails}
+                                csvUploadId={csvUploadId}
+                                listName={listName}
+                                originalFilename={originalFilename}
+                            />
                         </div>
                     </div>
                 </div>

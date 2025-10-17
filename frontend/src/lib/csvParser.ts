@@ -30,6 +30,7 @@ export interface CSVFullDataResult {
     preview: Record<string, string>[];
     totalRows: number;
     detectedEmailColumn: string | null;
+    detectionConfidence?: number;
 }
 
 

@@ -116,6 +116,7 @@ async function getHistory(req, res) {
                 v.updated_at,
                 v.completed_at,
                 c.csv_upload_id,
+                c.list_name,
                 c.original_filename,
                 c.file_size
             FROM verification_requests v

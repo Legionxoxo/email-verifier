@@ -814,6 +814,7 @@ export interface VerificationRequest {
  */
 export interface CSVDetails {
     csv_upload_id: string;
+    list_name?: string | null;
     original_filename: string;
     row_count: number;
     column_count: number;
@@ -864,6 +865,10 @@ export interface VerificationHistoryItem {
     created_at: number;
     updated_at: number;
     completed_at?: number;
+    csv_upload_id?: string;
+    list_name?: string | null;
+    original_filename?: string;
+    file_size?: number;
 }
 
 /**
@@ -896,7 +901,10 @@ export const verificationApi = {
      */
     async uploadCSV(formData: FormData): Promise<CSVUploadResponse> {
         try {
-            const response = await axiosPost<CSVUploadResponse>(
+            const response = await axiosPost<{
+                success: boolean;
+                data: CSVUploadResponse;
+            }>(
                 `${config.api.baseUrl}/api/verifier/csv/upload`,
                 formData,
                 {
@@ -913,7 +921,7 @@ export const verificationApi = {
                 throw error;
             }
 
-            return response.data;
+            return response.data.data;
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'CSV upload failed';
@@ -928,14 +936,23 @@ export const verificationApi = {
      * Analyzes CSV to find column containing emails
      *
      * @param {string} csvUploadId - CSV upload ID
+     * @param {string} listName - Name for the email list
+     * @param {boolean} hasHeader - Whether CSV has header row
      * @returns {Promise<EmailDetectionResponse>} Promise resolving to detection results
      * @throws {Error} If detection fails
      */
-    async detectEmailColumn(csvUploadId: string): Promise<EmailDetectionResponse> {
+    async detectEmailColumn(csvUploadId: string, listName: string, hasHeader: boolean): Promise<EmailDetectionResponse> {
         try {
-            const response = await axiosPost<EmailDetectionResponse>(
+            const response = await axiosPost<{
+                success: boolean;
+                data: EmailDetectionResponse;
+            }>(
                 `${config.api.baseUrl}/api/verifier/csv/detect-email`,
-                { csv_upload_id: csvUploadId },
+                {
+                    csv_upload_id: csvUploadId,
+                    list_name: listName,
+                    has_header: hasHeader
+                },
                 { headers: getAuthHeaders() }
             );
 
@@ -945,7 +962,7 @@ export const verificationApi = {
                 throw error;
             }
 
-            return response.data;
+            return response.data.data;
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Email detection failed';
@@ -965,7 +982,17 @@ export const verificationApi = {
      */
     async submitCSVVerification(csvUploadId: string, emailColumnIndex: number): Promise<CSVVerificationResponse> {
         try {
-            const response = await axiosPost<CSVVerificationResponse>(
+            const response = await axiosPost<{
+                success: boolean;
+                message: string;
+                data: {
+                    csv_upload_id: string;
+                    verification_request_id: string;
+                    upload_status: 'submitted';
+                    verification_status: 'pending' | 'processing' | 'completed' | 'failed';
+                    total_emails: number;
+                }
+            }>(
                 `${config.api.baseUrl}/api/verifier/csv/verify`,
                 { csv_upload_id: csvUploadId, email_column_index: emailColumnIndex },
                 { headers: getAuthHeaders() }
@@ -977,7 +1004,11 @@ export const verificationApi = {
                 throw error;
             }
 
-            return response.data;
+            return {
+                success: response.success,
+                message: response.data.message,
+                ...response.data.data
+            };
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Verification submission failed';
@@ -1004,7 +1035,10 @@ export const verificationApi = {
 
             const url = `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}?${queryParams.toString()}`;
 
-            const response = await axiosGet<VerificationRequest>(
+            const response = await axiosGet<{
+                success: boolean;
+                data: VerificationRequest;
+            }>(
                 url,
                 { headers: getAuthHeaders() }
             );
@@ -1015,7 +1049,7 @@ export const verificationApi = {
                 throw error;
             }
 
-            return response.data;
+            return response.data.data;
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to get verification details';
@@ -1054,7 +1088,15 @@ export const verificationApi = {
 
             const url = `${config.api.baseUrl}/api/verifier/history${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
-            const response = await axiosGet<HistoryResponse>(
+            const response = await axiosGet<{
+                success: boolean;
+                data: {
+                    requests: VerificationHistoryItem[];
+                    total: number;
+                    page: number;
+                    per_page: number;
+                }
+            }>(
                 url,
                 { headers: getAuthHeaders() }
             );
@@ -1065,7 +1107,10 @@ export const verificationApi = {
                 throw error;
             }
 
-            return response.data;
+            return {
+                success: response.success,
+                ...response.data.data
+            };
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to get history';
@@ -1119,7 +1164,15 @@ export const verificationApi = {
      */
     async verifySingleEmail(email: string): Promise<{ verification_request_id: string; message: string }> {
         try {
-            const response = await axiosPost<{ verification_request_id: string; message: string }>(
+            const response = await axiosPost<{
+                success: boolean;
+                message: string;
+                data: {
+                    verification_request_id: string;
+                    email: string;
+                    status: string;
+                }
+            }>(
                 `${config.api.baseUrl}/api/verifier/verify-single`,
                 { email },
                 { headers: getAuthHeaders() }
@@ -1131,7 +1184,10 @@ export const verificationApi = {
                 throw error;
             }
 
-            return response.data;
+            return {
+                verification_request_id: response.data.data.verification_request_id,
+                message: response.data.message
+            };
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Single email verification failed';

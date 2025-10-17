@@ -55,6 +55,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
 
     // API-related state
     const [csvUploadId, setCsvUploadId] = useState<string>('');
+    const [hasHeader, setHasHeader] = useState<boolean>(true);
 
 
     /**
@@ -85,12 +86,8 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
             // Create FormData for upload
             const formData = new FormData();
             formData.append('csvFile', file);
-            formData.append('hasHeader', 'true');
-            // Use filename without extension as default list name
-            const defaultListName = file.name.replace('.csv', '');
-            formData.append('listName', defaultListName);
 
-            // Upload to backend
+            // Upload to backend (without listName and hasHeader - those come later)
             console.log('Uploading CSV to backend...');
             const uploadResponse = await verificationApi.uploadCSV(formData);
             console.log('Upload response:', uploadResponse);
@@ -116,23 +113,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                 return;
             }
 
-            // Trigger email detection automatically
-            console.log('Detecting email column...');
-            const detectionResponse = await verificationApi.detectEmailColumn(uploadResponse.csv_upload_id);
-            console.log('Detection response:', detectionResponse);
-
-            parsedData.detectedEmailColumn = detectionResponse.detected_column;
-
-            // Show success message
-            if (detectionResponse.confidence >= 80) {
-                toast.success(`Email column "${detectionResponse.detected_column}" detected with ${detectionResponse.confidence.toFixed(0)}% confidence`);
-            } else if (detectionResponse.confidence >= 50) {
-                toast.info(`Email column "${detectionResponse.detected_column}" detected with ${detectionResponse.confidence.toFixed(0)}% confidence. Please verify.`);
-            } else {
-                toast.warning('Low confidence in email detection. Please manually select the email column.');
-            }
-
-            // Set file and parsed data
+            // Set file and parsed data (detection will be done in step one after user confirms listName and hasHeader)
             setSelectedFile(file);
             setParsedData(parsedData);
             changeStep('preview');
@@ -241,6 +222,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
             setParsedData(null);
             setError('');
             setCsvUploadId('');
+            setHasHeader(true);
             changeStep('upload');
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
@@ -259,6 +241,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
             if (!selectedFile) return;
 
             setIsProcessing(true);
+            setHasHeader(header);
 
             // Re-parse with new header setting
             const result = await parseCSVFullData(selectedFile, header);
@@ -275,19 +258,39 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
 
     /**
      * Handle step one completion (preview -> column select)
-     * Now receives listName from Step One
+     * Now receives listName from Step One and triggers email detection
      */
-    const handleStepOneNext = async (updatedListName: string) => {
+    const handleStepOneNext = async (listName: string) => {
         try {
-            // Note: listName was already sent during initial upload
-            // If user modified it in Step One, it's stored in backend
-            // We just proceed to column selection
-            console.log('List name from Step One:', updatedListName);
+            console.log('=== EMAIL DETECTION STARTED ===');
+            console.log('List name:', listName);
+            console.log('Has header:', hasHeader);
+            console.log('CSV upload ID:', csvUploadId);
 
+            setIsProcessing(true);
+
+            // Trigger email detection with list name and header flag
+            const detectionResponse = await verificationApi.detectEmailColumn(csvUploadId, listName, hasHeader);
+            console.log('Detection response:', detectionResponse);
+
+            // Update parsed data with detected email column and confidence
+            if (parsedData) {
+                parsedData.detectedEmailColumn = detectionResponse.detected_column;
+                parsedData.detectionConfidence = detectionResponse.confidence;
+                setParsedData({ ...parsedData });
+            }
+
+            console.log('=== EMAIL DETECTION COMPLETED ===');
+
+            // Proceed to column selection
             changeStep('column-select');
+
         } catch (error) {
-            console.error('Step one next error:', error);
-            toast.error('Failed to proceed to next step');
+            const errorMessage = error instanceof Error ? error.message : 'Failed to detect email column';
+            console.error('Email detection error:', error);
+            toast.error(errorMessage);
+        } finally {
+            setIsProcessing(false);
         }
     };
 

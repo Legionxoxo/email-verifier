@@ -90,8 +90,6 @@ async function uploadCSV(req, res) {
 		const csvUploadId = req.csvUploadId;
 		const filePath = req.file?.path;
 		const originalFilename = req.originalFilename;
-		const hasHeader = req.body.hasHeader === 'true' || req.body.hasHeader === true;
-		const listName = req.body.listName || null;
 		const user_id = req.user?.id;
 
 		if (!user_id) {
@@ -100,6 +98,12 @@ async function uploadCSV(req, res) {
 				message: 'Authentication required',
 			});
 		}
+
+		// Get has_header and list_name from request body
+		const hasHeader = req.body.has_header !== undefined
+			? (req.body.has_header === true || req.body.has_header === 'true' || req.body.has_header === '1')
+			: true;
+		const listName = req.body.list_name || null;
 
 		let rowIndex = 0;
 		let totalRows = 0;
@@ -201,7 +205,6 @@ async function uploadCSV(req, res) {
 			success: true,
 			data: {
 				csv_upload_id: csvUploadId,
-				list_name: listName,
 				original_filename: originalFilename,
 				has_header: hasHeader,
 				preview: preview,
@@ -240,7 +243,7 @@ async function uploadCSV(req, res) {
  */
 async function detectEmailColumn(req, res) {
 	try {
-		const { csv_upload_id } = req.body;
+		const { csv_upload_id, list_name, has_header } = req.body;
 		const user_id = req.user?.id;
 
 		if (!csv_upload_id) {
@@ -264,8 +267,52 @@ async function detectEmailColumn(req, res) {
 		}
 
 		const filePath = upload.file_path;
-		const hasHeader = upload.has_header === 1;
-		const headers = JSON.parse(upload.headers);
+		// Use hasHeader from request body if provided, otherwise use database value
+		const hasHeader = has_header !== undefined ? (has_header === true || has_header === 'true') : (upload.has_header === 1);
+		let headers = JSON.parse(upload.headers);
+
+		// If user changed has_header to false, we need to physically modify the CSV file to add generic headers
+		const previousHasHeader = upload.has_header === 1;
+		const headerChanged = hasHeader !== previousHasHeader;
+
+		if (headerChanged && !hasHeader) {
+			// Need to add generic headers to the actual CSV file
+			const tempPath = `${filePath}.temp`;
+			const writeStream = fs.createWriteStream(tempPath);
+			const readStream = fs.createReadStream(filePath);
+
+			// Generate new generic headers based on column count
+			headers = headers.map((_, i) => `column${i + 1}`);
+
+			let firstRow = true;
+			await new Promise((resolve, reject) => {
+				Papa.parse(readStream, {
+					header: false,
+					step: (results) => {
+						const row = /** @type {string[]} */ (results.data);
+
+						if (firstRow) {
+							// Add header row at the beginning
+							writeStream.write(Papa.unparse([headers]) + '\n');
+							firstRow = false;
+						}
+
+						// Write the data row
+						writeStream.write(Papa.unparse([row]) + '\n');
+					},
+					complete: () => {
+						writeStream.end();
+						resolve();
+					},
+					error: reject,
+				});
+			});
+
+			// Replace original file
+			fs.unlinkSync(filePath);
+			fs.renameSync(tempPath, filePath);
+		}
+
 		const columnScores = new Map();
 		const emailRegex =
 			/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
@@ -280,8 +327,8 @@ async function detectEmailColumn(req, res) {
 				step: (results) => {
 					const row = /** @type {string[]} */ (results.data);
 
-					// Skip header row if hasHeader is true
-					if (rowIndex === 0 && hasHeader) {
+					// Skip header row - file now ALWAYS has headers after potential modification
+					if (rowIndex === 0) {
 						rowIndex++;
 						return;
 					}
@@ -325,11 +372,14 @@ async function detectEmailColumn(req, res) {
 
 		const confidence = totalRows > 0 ? (bestScore / totalRows) * 100 : 0;
 
-		// Update database
+		// Update database with list_name, has_header, headers, and detection results
 		const now = Date.now();
 		const updateStmt = db.prepare(`
             UPDATE csv_uploads
-            SET selected_email_column = ?,
+            SET list_name = ?,
+                has_header = ?,
+                headers = ?,
+                selected_email_column = ?,
                 selected_email_column_index = ?,
                 column_scores = ?,
                 detection_confidence = ?,
@@ -339,6 +389,9 @@ async function detectEmailColumn(req, res) {
         `);
 
 		updateStmt.run(
+			list_name || null,
+			1, // After modification, CSV always has headers now (either original or generic)
+			JSON.stringify(headers),
 			bestColumn,
 			bestColumnIndex,
 			JSON.stringify(Object.fromEntries(columnScores)),
@@ -588,24 +641,32 @@ async function downloadCSVResults(req, res) {
 		// Create email → result Map for O(1) lookup
 		const resultsMap = new Map(resultsArray.map(r => [r.email, r]));
 
-		// Setup output stream
-		const outputPath = path.join(
-			__dirname,
-			'../../../uploads/results',
-			`${csv_upload_id}_results.csv`
-		);
-
-		// Ensure results directory exists
-		const resultsDir = path.dirname(outputPath);
-		if (!fs.existsSync(resultsDir)) {
-			fs.mkdirSync(resultsDir, { recursive: true });
-		}
-
-		const writeStream = fs.createWriteStream(outputPath);
-		const readStream = fs.createReadStream(upload.file_path);
-
 		const hasHeader = upload.has_header === 1;
 		const emailColumnIndex = upload.selected_email_column_index;
+
+		// Check if results have already been added to the CSV
+		const headers = JSON.parse(upload.headers);
+		const hasStatusColumns = headers.includes('status') && headers.includes('status_reason');
+
+		// If status columns already exist, just download the file
+		if (hasStatusColumns) {
+			const downloadFilename = upload.list_name
+				? `${upload.list_name}.csv`
+				: upload.original_filename;
+
+			res.setHeader('Content-Type', 'text/csv');
+			res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
+
+			const fileStream = fs.createReadStream(upload.file_path);
+			fileStream.pipe(res);
+			return;
+		}
+
+		// Otherwise, modify the original CSV file to add status columns
+		const tempPath = `${upload.file_path}.temp`;
+		const writeStream = fs.createWriteStream(tempPath);
+		const readStream = fs.createReadStream(upload.file_path);
+
 		let rowIndex = 0;
 
 		// Stream original CSV and append status columns
@@ -617,7 +678,7 @@ async function downloadCSVResults(req, res) {
 
 					if (rowIndex === 0 && hasHeader) {
 						// First row is header - append status column headers
-						row.push('email_status', 'status_message');
+						row.push('status', 'status_reason');
 					} else {
 						// Data row - get email from selected column
 						const email = row[emailColumnIndex];
@@ -644,6 +705,19 @@ async function downloadCSVResults(req, res) {
 			});
 		});
 
+		// Replace original file with modified file
+		fs.unlinkSync(upload.file_path);
+		fs.renameSync(tempPath, upload.file_path);
+
+		// Update headers in database
+		headers.push('status', 'status_reason');
+		const updateHeadersStmt = db.prepare(`
+			UPDATE csv_uploads
+			SET headers = ?, updated_at = ?
+			WHERE csv_upload_id = ?
+		`);
+		updateHeadersStmt.run(JSON.stringify(headers), Date.now(), csv_upload_id);
+
 		// Download response - use list_name if available, otherwise original_filename
 		const downloadFilename = upload.list_name
 			? `${upload.list_name}.csv`
@@ -652,7 +726,7 @@ async function downloadCSVResults(req, res) {
 		res.setHeader('Content-Type', 'text/csv');
 		res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
 
-		const fileStream = fs.createReadStream(outputPath);
+		const fileStream = fs.createReadStream(upload.file_path);
 		fileStream.pipe(res);
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);

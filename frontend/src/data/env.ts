@@ -33,7 +33,8 @@ function getEnvVar(key: string, defaultValue: string | null = null, required: bo
 
 // API configuration
 
-export const API_BASE_URL = getEnvVar('VITE_API_URL', 'http://localhost:5000', false);
+// Use empty string for production (same origin) or localhost for development
+export const API_BASE_URL = getEnvVar('VITE_API_URL', '', false);
 export const API_TIMEOUT = parseInt(getEnvVar('VITE_API_TIMEOUT', '10000', false), 10);
 
 

@@ -14,6 +14,8 @@ interface ResultsListProps {
     results: EmailVerificationResult[];
     totalCount: number;
     csvUploadId?: string; // Optional CSV upload ID for backend download
+    listName?: string | null; // Optional list name for download filename
+    originalFilename?: string; // Optional original filename as fallback
 }
 
 
@@ -60,7 +62,11 @@ function getStatusIcon(status: string) {
  * Download results as CSV from backend
  * Backend generates enriched CSV with original data + verification results
  */
-async function downloadCSV(csvUploadId: string | undefined) {
+async function downloadCSV(
+    csvUploadId: string | undefined,
+    listName: string | null | undefined,
+    originalFilename: string | undefined
+) {
     try {
         if (!csvUploadId) {
             console.error('No CSV upload ID available for download');
@@ -71,11 +77,16 @@ async function downloadCSV(csvUploadId: string | undefined) {
         const { verificationApi } = await import('../../lib/api');
         const blob = await verificationApi.downloadCSVResults(csvUploadId);
 
+        // Determine filename - prefer list_name, fallback to original_filename
+        const downloadFilename = listName
+            ? `${listName}.csv`
+            : (originalFilename || `results_${csvUploadId}.csv`);
+
         // Create download link
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
-        link.setAttribute('download', ''); // Filename comes from backend Content-Disposition header
+        link.setAttribute('download', downloadFilename);
         link.style.visibility = 'hidden';
 
         document.body.appendChild(link);
@@ -93,7 +104,7 @@ async function downloadCSV(csvUploadId: string | undefined) {
 /**
  * Results List Component
  */
-export function ResultsList({ results, totalCount, csvUploadId }: ResultsListProps) {
+export function ResultsList({ results, totalCount, csvUploadId, listName, originalFilename }: ResultsListProps) {
     return (
         <Card>
             <CardHeader>
@@ -105,7 +116,7 @@ export function ResultsList({ results, totalCount, csvUploadId }: ResultsListPro
                     <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => downloadCSV(csvUploadId)}
+                        onClick={() => downloadCSV(csvUploadId, listName, originalFilename)}
                         className="cursor-pointer"
                     >
                         Download CSV

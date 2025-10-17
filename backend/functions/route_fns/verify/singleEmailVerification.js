@@ -185,6 +185,34 @@ async function getVerificationStatus(req, res) {
 				responseData.statistics = verificationRequest.statistics;
 			}
 
+			// Add CSV details if this is a CSV verification
+			if (verificationRequest.request_type === 'csv') {
+				const db = require('../../../database/connection').getDb();
+				const csvUpload = /** @type {{csv_upload_id: string, list_name: string | null, original_filename: string, has_header: number, headers: string, selected_email_column: string | null, detection_confidence: number | null, row_count: number, column_count: number} | undefined} */ (
+					db.prepare(`
+						SELECT csv_upload_id, list_name, original_filename, has_header, headers,
+						       selected_email_column, detection_confidence, row_count, column_count
+						FROM csv_uploads
+						WHERE verification_request_id = ?
+					`).get(verification_request_id)
+				);
+
+				if (csvUpload) {
+					responseData.csv_details = {
+						csv_upload_id: csvUpload.csv_upload_id,
+						list_name: csvUpload.list_name,
+						original_filename: csvUpload.original_filename,
+						has_header: csvUpload.has_header === 1,
+						headers: JSON.parse(csvUpload.headers),
+						selected_email_column: csvUpload.selected_email_column,
+						detection_confidence: csvUpload.detection_confidence,
+						row_count: csvUpload.row_count,
+						column_count: csvUpload.column_count,
+						download_url: `/api/verifier/csv/${csvUpload.csv_upload_id}/download`
+					};
+				}
+			}
+
 			return res.json({
 				success: true,
 				data: responseData,

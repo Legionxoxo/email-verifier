@@ -73,7 +73,9 @@ export function HistoryPage() {
             // Map API response to local format
             const mappedExports: VerificationExport[] = response.requests.map((item) => ({
                 ...item,
-                name: item.request_type === 'csv' ? `CSV Upload ${item.email_count} emails` : `Single Email Verification`,
+                name: item.request_type === 'csv'
+                    ? (item.list_name || item.original_filename || `CSV Upload ${item.email_count} emails`)
+                    : `Single Email Verification`,
                 validEmails: 0, // Will be calculated from results if available
                 date: new Date(item.created_at).toISOString()
             }));
@@ -123,11 +125,15 @@ export function HistoryPage() {
             // Download CSV results
             const blob = await verificationApi.downloadCSVResults(details.csv_details.csv_upload_id);
 
-            // Create download link
+            // Create download link using list_name if available
+            const downloadFilename = details.csv_details.list_name
+                ? `${details.csv_details.list_name}.csv`
+                : (details.csv_details.original_filename || `results_${verificationRequestId}.csv`);
+
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = details.csv_details.original_filename || `results_${verificationRequestId}.csv`;
+            a.download = downloadFilename;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -143,7 +149,16 @@ export function HistoryPage() {
 
 
     const handleViewDetails = (verificationRequestId: string) => {
-        navigate(`/verify/${verificationRequestId}`);
+        // Find the export to check its status
+        const exp = exports.find(e => e.verification_request_id === verificationRequestId);
+
+        // If completed, go directly to results page
+        // Otherwise, go to progress page for polling
+        if (exp?.status === 'completed') {
+            navigate(`/results/${verificationRequestId}`);
+        } else {
+            navigate(`/verify/${verificationRequestId}`);
+        }
     };
 
     const handleBackNavigation = () => {

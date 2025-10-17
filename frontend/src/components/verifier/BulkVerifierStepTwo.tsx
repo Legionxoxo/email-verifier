@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Mail, Info } from 'lucide-react';
+import { Mail, Info, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import type { CSVFullDataResult } from '../../lib/csvParser';
@@ -88,6 +88,24 @@ export function BulkVerifierStepTwo({
                         <h3 className="font-semibold">Select the column with Emails</h3>
                     </div>
 
+                    {/* Detection confidence warning */}
+                    {parsedData.detectionConfidence !== undefined && parsedData.detectionConfidence < 80 && (
+                        <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start space-x-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-orange-800">
+                                    {parsedData.detectionConfidence >= 50
+                                        ? 'Moderate confidence in email detection'
+                                        : 'Low confidence in email detection'}
+                                </p>
+                                <p className="text-xs text-orange-700 mt-1">
+                                    We detected "{selectedColumn}" as the email column with {parsedData.detectionConfidence.toFixed(0)}% confidence.
+                                    Please verify the selection below or choose a different column.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Table with column selection */}
                     <div className="overflow-x-auto border border-gray-200 rounded-lg">
                         <table className="min-w-full divide-y divide-gray-200">
@@ -142,7 +160,7 @@ export function BulkVerifierStepTwo({
             <div className="flex items-center space-x-2 text-sm text-gray-700">
                 <Info className="h-4 w-4 text-blue-500" />
                 <p>
-                    *This file contains <span className="font-semibold text-green-600">{emailStats.uniqueCount}</span> unique and valid syntax emails.
+                    *Select the column with most unique and valid syntax emails.
                 </p>
             </div>
 
