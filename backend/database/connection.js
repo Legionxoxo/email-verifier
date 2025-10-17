@@ -211,10 +211,37 @@ function createTables(db) {
             )
         `);
 
+		// CSV uploads table (CSV-specific metadata)
+		const createCsvUploadsTable = db.prepare(`
+            CREATE TABLE IF NOT EXISTS csv_uploads (
+                csv_upload_id TEXT PRIMARY KEY,
+                verification_request_id TEXT,
+                user_id INTEGER NOT NULL,
+                original_filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                has_header INTEGER NOT NULL DEFAULT 1,
+                headers TEXT NOT NULL,
+                row_count INTEGER NOT NULL,
+                column_count INTEGER NOT NULL,
+                preview_data TEXT NOT NULL,
+                selected_email_column TEXT,
+                selected_email_column_index INTEGER,
+                column_scores TEXT,
+                detection_confidence REAL,
+                upload_status TEXT CHECK(upload_status IN ('uploaded', 'detecting', 'ready', 'submitted')) DEFAULT 'uploaded',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                FOREIGN KEY (verification_request_id) REFERENCES verification_requests (verification_request_id) ON DELETE CASCADE
+            )
+        `);
+
 		// Execute table creation
 		createUsersTable.run();
 		createAuthTokensTable.run();
 		createVerificationRequestsTable.run();
+		createCsvUploadsTable.run();
 
 		// Create indexes for better performance
 		const createEmailIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)');
@@ -231,6 +258,13 @@ function createTables(db) {
 		const createVerificationStatusIndex = db.prepare(
 			'CREATE INDEX IF NOT EXISTS idx_verification_status ON verification_requests(user_id, status)'
 		);
+		const createCsvUserIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_csv_user ON csv_uploads(user_id)');
+		const createCsvVerificationIndex = db.prepare(
+			'CREATE INDEX IF NOT EXISTS idx_csv_verification ON csv_uploads(verification_request_id)'
+		);
+		const createCsvUploadStatusIndex = db.prepare(
+			'CREATE INDEX IF NOT EXISTS idx_csv_upload_status ON csv_uploads(upload_status)'
+		);
 
 		createEmailIndex.run();
 		createTokenIndex.run();
@@ -238,6 +272,9 @@ function createTables(db) {
 		createVerificationUserDateIndex.run();
 		createVerificationUserTypeIndex.run();
 		createVerificationStatusIndex.run();
+		createCsvUserIndex.run();
+		createCsvVerificationIndex.run();
+		createCsvUploadStatusIndex.run();
 
 		console.log('Database tables created successfully');
 	} catch (error) {

@@ -12,6 +12,14 @@ const express = require('express');
 const controller = require('../../functions/verifier/controller');
 const { authenticate } = require('../../functions/middleware/auth');
 const { verifySingleEmail, getVerificationStatus } = require('../../functions/route_fns/verify/singleEmailVerification');
+const {
+	upload,
+	uploadCSV,
+	detectEmailColumn,
+	submitCSVVerification,
+	downloadCSVResults,
+} = require('../../functions/route_fns/verify/bulkCSVVerification');
+const { getHistory } = require('../../functions/route_fns/verify/verificationHistory');
 
 
 // Create Express router instance
@@ -40,6 +48,68 @@ router.post('/verify-single', authenticate, verifySingleEmail);
  * @returns {Promise<void>} Sends JSON response with verification status and results
  */
 router.get('/verification/:verification_request_id', authenticate, getVerificationStatus);
+
+
+/**
+ * POST /api/verifier/csv/upload
+ * Upload CSV file for email verification
+ * Requires authentication and multipart/form-data
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with CSV upload details
+ */
+router.post('/csv/upload', authenticate, upload.single('csvFile'), uploadCSV);
+
+
+/**
+ * POST /api/verifier/csv/detect-email
+ * Detect email column in uploaded CSV
+ * Requires authentication
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with detected email column
+ */
+router.post('/csv/detect-email', authenticate, detectEmailColumn);
+
+
+/**
+ * POST /api/verifier/csv/verify
+ * Submit CSV for email verification
+ * Requires authentication
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with verification request details
+ */
+router.post('/csv/verify', authenticate, submitCSVVerification);
+
+
+/**
+ * GET /api/verifier/csv/:csv_upload_id/download
+ * Download CSV with verification results
+ * Requires authentication
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends CSV file with results
+ */
+router.get('/csv/:csv_upload_id/download', authenticate, downloadCSVResults);
+
+
+/**
+ * GET /api/verifier/history
+ * Get user's verification history with time-based filters
+ * Requires authentication
+ * Query params: ?page=1&per_page=50&period=this_month
+ * Period options: this_month, last_month, last_6_months
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with paginated history
+ */
+router.get('/history', authenticate, getHistory);
 
 
 /**
