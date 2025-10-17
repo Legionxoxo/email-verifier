@@ -7,7 +7,7 @@ const queue = require('../staging/queue');
 const stateVariables = require('../../data/stateVariables');
 const sqlAsync = require('../../database/sqlAsync');
 const antiGreylisting = require('./antiGreylisting');
-const promiseAwaitMs = require('../utils/promiseAwaitMs');
+const { axiosPost } = require('../utils/axios');
 
 /**
  * @typedef {Object} RequestObj
@@ -103,6 +103,24 @@ class Controller {
 				result TEXT NOT NULL,
 				response_url TEXT NOT NULL,
 				created_at NUMBER NOT NULL
+                )`);
+
+			// initialize the results tracking table (replaces PostgreSQL minion_assign table)
+			await sqlAsync.runAsync(`CREATE TABLE IF NOT EXISTS ${this.controllerID}Results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+				request_id TEXT NOT NULL UNIQUE,
+				status TEXT CHECK(status IN ('queued', 'processing', 'completed', 'failed')) DEFAULT 'queued',
+				verifying BOOLEAN DEFAULT 0,
+				greylist_found BOOLEAN DEFAULT 0,
+				greylist_found_at TEXT,
+				blacklist_found BOOLEAN DEFAULT 0,
+				blacklist_found_at TEXT,
+				results TEXT,
+				total_emails INTEGER DEFAULT 0,
+				completed_emails INTEGER DEFAULT 0,
+				created_at NUMBER NOT NULL,
+				updated_at NUMBER NOT NULL,
+				completed_at NUMBER
                 )`);
 
 			// create the verifier worker instances
@@ -382,7 +400,7 @@ class Controller {
 				recheck_required_len: recheck_required.length,
 			});
 
-			// incase greylisted and blacklisted emails are found, forward the request to the cluster
+			// incase greylisted and blacklisted emails are found, track them in database
 			if (
 				(Array.isArray(greylisted_emails) && greylisted_emails.length > 0) ||
 				(Array.isArray(blacklisted_emails) && blacklisted_emails.length > 0) ||
@@ -398,21 +416,6 @@ class Controller {
 					// mark that the request has blacklisted emails
 					await this.markBlacklisted(request_id);
 				}
-
-				// send the request to the cluster to analyze
-				// const status = await minionConnect.forwardRequest(request_id, [
-				// 	...greylisted_emails,
-				// 	...blacklisted_emails,
-				// 	...recheck_required,
-				// ]);
-
-				// if (!status) {
-				// 	// mark the request as complete for the verifier controller.
-				// 	// -> code here <-
-				// 	this.logger.debug(`Failed to forward request to cluster for request_id ${request_id}`);
-				// } else {
-				// 	this.logger.debug(`Request ${request_id} forwareded to the cluster!`);
-				// }
 			}
 
 			if (
@@ -422,10 +425,7 @@ class Controller {
 				this.logger.debug(`Greylisted emails found for request id -> ${request_id}`);
 
 				// add to anti greylisting
-				await Promise.allSettled([
-					antiGreylisting.add(request_id, greylisted_emails, requestObj.response_url),
-					minionConnect.markGreylisted(request_id),
-				]);
+				await antiGreylisting.add(request_id, greylisted_emails, requestObj.response_url);
 
 				// Add the request to the archive
 				if (this.request_archive.get(request_id)) {
@@ -468,36 +468,27 @@ class Controller {
 					finalResult = new Map([...result, ...archivedResult]); // archived results will overlap the entries from result
 				}
 
-				const existsInDB = await minionConnect.requestInDB(request_id);
 				const resultArr = Array.from(finalResult.values()),
 					resultLen = resultArr?.length || 0;
 
-				if (existsInDB) {
-					this.logger.debug(`Informing for request ${request_id} via database!`);
-					const success = await minionConnect.completeRequest(request_id, resultArr);
+				// mark the request as completed in the database
+				await this.updateResultsDB(request_id, {
+					status: 'completed',
+					results: JSON.stringify(resultArr),
+					total_emails: resultLen,
+					completed_emails: resultLen,
+					completed_at: new Date().getTime(),
+				});
+
+				this.logger.debug(`Request ${request_id} marked as completed in database`);
+
+				// send the request to the client via webhook callback if response_url is provided
+				const response_url = this.request_assignments[workerIndex]?.response_url;
+				if (response_url) {
+					this.logger.debug(`Sending callback for request ${request_id} to ${response_url}`);
+					await this.sendResultsCallback(request_id, response_url, resultArr, resultLen);
 				} else {
-					this.logger.debug(`Informing for request ${request_id} through API!`);
-					// send the request to the client - this will happen after greylisting
-					const response_url = this.request_assignments[workerIndex]?.response_url;
-					if (response_url) {
-						for (let i = 0; i < 200; i++) {
-							const axiosRes = await axiosPost(
-								response_url || `https://${CONTROLLER_DOMAIN}/api/v1/minion/response`,
-								{
-									api_key: API_KEY,
-									minion_id: SERVER_ID,
-									emails_verified: 0,
-									processed_emails: resultArr || [],
-									total_emails: resultLen,
-									state: 'complete',
-									request_id: request_id || '',
-									state_uuid: stateVariables.uuid || '',
-								}
-							);
-							if (axiosRes && axiosRes.status === 200 && axiosRes.data?.success === true) break;
-							await promiseAwait(1);
-						}
-					}
+					this.logger.debug(`No response_url provided for request ${request_id}, results stored in database`);
 				}
 			}
 
@@ -586,101 +577,191 @@ class Controller {
 	}
 
 	/**
-	 * Mark the request as 'verifying' in the database
+	 * Update request status and details in local SQLite database (replaces PostgreSQL operations)
+	 * @param {string} request_id
+	 * @param {Partial<{status: string, verifying: boolean, greylist_found: boolean, greylist_found_at: string, blacklist_found: boolean, blacklist_found_at: string, results: string, total_emails: number, completed_emails: number, completed_at: number}>} updates
+	 * @returns {Promise<boolean>}
+	 */
+	async updateResultsDB(request_id, updates) {
+		let success = false;
+		try {
+			// build dynamic UPDATE query
+			const keys = Object.keys(updates);
+			const setClause = keys.map(key => `${key} = ?`).join(', ');
+			const values = keys.map(key => updates[key]);
+
+			const now = new Date().getTime();
+
+			await sqlAsync.runAsync(
+				`INSERT INTO ${this.controllerID}Results
+				(request_id, ${keys.join(', ')}, created_at, updated_at)
+				VALUES (?, ${keys.map(() => '?').join(', ')}, ?, ?)
+				ON CONFLICT (request_id) DO UPDATE SET ${setClause}, updated_at = ?`,
+				[request_id, ...values, now, now, ...values, now]
+			);
+
+			success = true;
+		} catch (error) {
+			this.logger.error(`updateResultsDB() error -> ${error?.toString()}`);
+		} finally {
+			return success;
+		}
+	}
+
+	/**
+	 * Get request status and details from local database
+	 * @param {string} request_id
+	 * @returns {Promise<{request_id: string, status: string, verifying: boolean, greylist_found: boolean, blacklist_found: boolean, results: any, total_emails: number, completed_emails: number, created_at: number, updated_at: number, completed_at: number | null} | null>}
+	 */
+	async getRequestStatus(request_id) {
+		/** @type {any} */
+		let status = null;
+		try {
+			/** @type {any} */
+			const dbRes = await sqlAsync.getAsync(`SELECT * FROM ${this.controllerID}Results WHERE request_id = ?`, [
+				request_id,
+			]);
+
+			if (dbRes) {
+				status = {
+					request_id: dbRes.request_id,
+					status: dbRes.status,
+					verifying: !!dbRes.verifying,
+					greylist_found: !!dbRes.greylist_found,
+					blacklist_found: !!dbRes.blacklist_found,
+					results: dbRes.results ? JSON.parse(dbRes.results) : null,
+					total_emails: dbRes.total_emails || 0,
+					completed_emails: dbRes.completed_emails || 0,
+					created_at: dbRes.created_at,
+					updated_at: dbRes.updated_at,
+					completed_at: dbRes.completed_at || null,
+				};
+			}
+		} catch (error) {
+			this.logger.error(`getRequestStatus() error -> ${error?.toString()}`);
+		} finally {
+			return status;
+		}
+	}
+
+	/**
+	 * Get completed request results (for API endpoint)
+	 * @param {string} request_id
+	 * @returns {Promise<VerificationObj[] | null>}
+	 */
+	async getRequestResults(request_id) {
+		try {
+			const status = await this.getRequestStatus(request_id);
+
+			if (!status || status.status !== 'completed') {
+				return null;
+			}
+
+			return status.results;
+		} catch (error) {
+			this.logger.error(`getRequestResults() error -> ${error?.toString()}`);
+			return null;
+		}
+	}
+
+	/**
+	 * Send verification results to HTTP callback URL with retry logic
+	 * @param {string} request_id
+	 * @param {string} response_url
+	 * @param {VerificationObj[]} results
+	 * @param {number} totalEmails
+	 * @param {number} maxRetries
+	 * @returns {Promise<boolean>}
+	 */
+	async sendResultsCallback(request_id, response_url, results, totalEmails, maxRetries = 5) {
+		if (!response_url) {
+			this.logger.debug(`No response_url provided for request ${request_id}, skipping callback`);
+			return true;
+		}
+
+		try {
+			for (let attempt = 1; attempt <= maxRetries; attempt++) {
+				try {
+					this.logger.debug(`Sending callback for ${request_id} (attempt ${attempt}/${maxRetries})`);
+
+					const response = await axiosPost(response_url, {
+						request_id: request_id,
+						status: 'completed',
+						total_emails: totalEmails,
+						completed_emails: results.length,
+						results: results,
+						timestamp: new Date().toISOString(),
+					});
+
+					if (response.success && response.status === 200) {
+						this.logger.info(`Callback successful for request ${request_id}`);
+						return true;
+					}
+
+					this.logger.warn(`Callback attempt ${attempt} failed for ${request_id}: status ${response.status}`);
+
+					if (attempt < maxRetries) {
+						await promiseAwait(Math.min(attempt * 2, 10));
+					}
+				} catch (error) {
+					this.logger.error(`Callback attempt ${attempt} error for ${request_id}: ${error?.toString()}`);
+
+					if (attempt < maxRetries) {
+						await promiseAwait(Math.min(attempt * 2, 10));
+					}
+				}
+			}
+
+			this.logger.error(`All callback attempts failed for request ${request_id}`);
+			return false;
+		} catch (error) {
+			this.logger.error(`sendResultsCallback() error -> ${error?.toString()}`);
+			return false;
+		}
+	}
+
+	/**
+	 * Mark the request as 'verifying' in the database (updated to use local SQLite)
 	 * @private
 	 * @param {string} request_id
 	 * @param {number} depth
 	 * @returns {Promise<boolean>}
 	 */
 	async markAsVerifying(request_id, depth = 0) {
-		let success = false;
-
-		if (depth > 200) {
-			this.logger.error(`markAsVerifying() max retries for request -> ${request_id}`);
-			return success;
-		}
-		try {
-			const res = await pool.query(
-				`UPDATE ${tableNames.minion_assign} SET verifying = $1 WHERE request_id = $2 AND server_id = $3`,
-				[true, request_id, SERVER_ID]
-			);
-
-			success = true;
-		} catch (error) {
-			this.logger.error(`markAsVerifying() error -> ${error?.toString()}`);
-		} finally {
-			depth++;
-			if (success) return success;
-
-			await promiseAwaitMs(100);
-			return await this.markAsVerifying(request_id, depth);
-		}
+		return await this.updateResultsDB(request_id, {
+			status: 'processing',
+			verifying: true,
+		});
 	}
 
 	/**
-	 * Mark the request as 'greylisted' in the database
+	 * Mark the request as 'greylisted' in the database (updated to use local SQLite)
 	 * @private
 	 * @param {string} request_id
 	 * @param {number} depth
 	 * @returns {Promise<boolean>}
 	 */
 	async markGreylisted(request_id, depth = 0) {
-		let success = false;
-
-		if (depth > 200) {
-			this.logger.error(`markAsVerifying() max retries for request -> ${request_id}`);
-			return success;
-		}
-		try {
-			const now = new Date().toISOString();
-			const res = await pool.query(
-				`UPDATE ${tableNames.minion_assign} SET greylist_found = $1, greylist_found_at = $2 WHERE request_id = $3 AND server_id = $4`,
-				[true, now, request_id, SERVER_ID]
-			);
-
-			success = true;
-		} catch (error) {
-			this.logger.error(`markGreylisted() error -> ${error?.toString()}`);
-		} finally {
-			depth++;
-			if (success) return success;
-
-			await promiseAwaitMs(100);
-			return await this.markGreylisted(request_id, depth);
-		}
+		const now = new Date().toISOString();
+		return await this.updateResultsDB(request_id, {
+			greylist_found: true,
+			greylist_found_at: now,
+		});
 	}
 
 	/**
-	 * Mark the request as 'blacklisted' in the database
+	 * Mark the request as 'blacklisted' in the database (updated to use local SQLite)
 	 * @private
 	 * @param {string} request_id
 	 * @param {number} depth
 	 * @returns {Promise<boolean>}
 	 */
 	async markBlacklisted(request_id, depth = 0) {
-		let success = false;
-
-		if (depth > 200) {
-			this.logger.error(`markAsVerifying() max retries for request -> ${request_id}`);
-			return success;
-		}
-		try {
-			const now = new Date().toISOString();
-			const res = await pool.query(
-				`UPDATE ${tableNames.minion_assign} SET blacklist_found = $1, blacklist_found_at = $2 WHERE request_id = $3 AND server_id = $4`,
-				[true, now, request_id, SERVER_ID]
-			);
-
-			success = true;
-		} catch (error) {
-			this.logger.error(`markBlacklisted() error -> ${error?.toString()}`);
-		} finally {
-			depth++;
-			if (success) return success;
-
-			await promiseAwaitMs(100);
-			return await this.markBlacklisted(request_id, depth);
-		}
+		const now = new Date().toISOString();
+		return await this.updateResultsDB(request_id, {
+			blacklist_found: true,
+			blacklist_found_at: now,
+		});
 	}
 
 	/**

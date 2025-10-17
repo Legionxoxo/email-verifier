@@ -1,4 +1,4 @@
-const axiosGet = require("../../utils/axiosGet");
+const { axiosGet } = require("../../utils/axios");
 const {z} = require("zod");
 const promiseAwait = require("../../utils/promiseAwait");
 

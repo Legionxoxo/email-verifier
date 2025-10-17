@@ -1,5 +1,5 @@
 const UserAgent = require('user-agents');
-const axiosPost = require('../../utils/axiosPost');
+const { axiosPost } = require('../../utils/axios');
 const winston = require('winston');
 const { loggerTypes } = require('../../logging/logger');
 

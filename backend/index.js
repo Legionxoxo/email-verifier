@@ -11,6 +11,7 @@ const { initializeDatabase } = require('./database/connection');
 const { helmetConfig, corsConfig } = require('./functions/middleware/security');
 const authRoutes = require('./routes/api/auth');
 const settingsRoutes = require('./routes/api/settings');
+const verifierRoutes = require('./routes/api/verifier');
 
 // Validate environment variables on startup
 validateEnvironment();
@@ -96,6 +97,9 @@ function setupRoutes() {
 		// Settings routes
 		app.use('/api/settings', settingsRoutes);
 
+		// Verifier routes
+		app.use('/api/verifier', verifierRoutes);
+
 		// API health check
 		app.get('/api/health', (req, res) => {
 			res.json({
@@ -105,6 +109,7 @@ function setupRoutes() {
 					database: 'connected',
 					authentication: 'active',
 					settings: 'active',
+					verifier: 'active',
 				},
 				timestamp: new Date().toISOString(),
 			});
@@ -184,6 +189,7 @@ function startServer() {
 			console.log(`📚 API Documentation: http://localhost:${port}/api/health`);
 			console.log(`🔐 Authentication API: http://localhost:${port}/api/auth/health`);
 			console.log(`⚙️  Settings API: http://localhost:${port}/api/settings/health`);
+			console.log(`📧 Verifier API: http://localhost:${port}/api/verifier/health`);
 			console.log(`⚡ Environment: ${process.env.NODE_ENV || 'development'}\n`);
 		});
 	} catch (error) {

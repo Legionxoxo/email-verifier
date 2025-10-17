@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const axiosGet = require('../../utils/axiosGet');
+const { axiosGet } = require('../../utils/axios');
 
 const gravatarBaseUrl = 'https://www.gravatar.com/avatar/';
 const gravatarDefaultMd5 = 'd5fe5cbcc31cff5f8ac010db72eb000c';
