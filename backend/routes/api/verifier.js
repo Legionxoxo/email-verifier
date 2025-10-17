@@ -10,10 +10,36 @@
 
 const express = require('express');
 const controller = require('../../functions/verifier/controller');
+const { authenticate } = require('../../functions/middleware/auth');
+const { verifySingleEmail, getVerificationStatus } = require('../../functions/route_fns/verify/singleEmailVerification');
 
 
 // Create Express router instance
 const router = express.Router();
+
+
+/**
+ * POST /api/verifier/verify-single
+ * Verify a single email address
+ * Requires authentication
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with verification request ID
+ */
+router.post('/verify-single', authenticate, verifySingleEmail);
+
+
+/**
+ * GET /api/verifier/verification/:verification_request_id
+ * Get verification status and results for a specific request
+ * Requires authentication
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with verification status and results
+ */
+router.get('/verification/:verification_request_id', authenticate, getVerificationStatus);
 
 
 /**

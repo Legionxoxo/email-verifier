@@ -195,9 +195,26 @@ function createTables(db) {
             )
         `);
 
+		// Verification requests table (unified for single, CSV, API verifications)
+		const createVerificationRequestsTable = db.prepare(`
+            CREATE TABLE IF NOT EXISTS verification_requests (
+                verification_request_id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                request_type TEXT CHECK(request_type IN ('single', 'csv', 'api')) NOT NULL,
+                emails TEXT NOT NULL,
+                results TEXT,
+                status TEXT CHECK(status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                completed_at INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        `);
+
 		// Execute table creation
 		createUsersTable.run();
 		createAuthTokensTable.run();
+		createVerificationRequestsTable.run();
 
 		// Create indexes for better performance
 		const createEmailIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)');
@@ -205,10 +222,22 @@ function createTables(db) {
 		const createTokenTypeIndex = db.prepare(
 			'CREATE INDEX IF NOT EXISTS idx_auth_tokens_type ON auth_tokens (token_type)'
 		);
+		const createVerificationUserDateIndex = db.prepare(
+			'CREATE INDEX IF NOT EXISTS idx_verification_user_date ON verification_requests(user_id, created_at DESC)'
+		);
+		const createVerificationUserTypeIndex = db.prepare(
+			'CREATE INDEX IF NOT EXISTS idx_verification_user_type ON verification_requests(user_id, request_type)'
+		);
+		const createVerificationStatusIndex = db.prepare(
+			'CREATE INDEX IF NOT EXISTS idx_verification_status ON verification_requests(user_id, status)'
+		);
 
 		createEmailIndex.run();
 		createTokenIndex.run();
 		createTokenTypeIndex.run();
+		createVerificationUserDateIndex.run();
+		createVerificationUserTypeIndex.run();
+		createVerificationStatusIndex.run();
 
 		console.log('Database tables created successfully');
 	} catch (error) {
