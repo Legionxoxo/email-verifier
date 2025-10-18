@@ -13,7 +13,98 @@ const Papa = require('papaparse');
 const multer = require('multer');
 const queue = require('../../staging/queue');
 const { getDb } = require('../../../database/connection');
+const { MAX_CSV_ROWS, MAX_CSV_SIZE_MB } = require('../../../data/env');
 const { createVerificationRequest, updateVerificationStatus } = require('./verificationDB');
+
+
+// ============================================================
+// CSV PARSING SAFETY - Header sanitization & validation
+// ============================================================
+
+/**
+ * NOTE ON PAPAPARSE SAFETY:
+ * - Commas (,) in cell values: ✅ Handled automatically by PapaParse (RFC 4180)
+ * - Newlines (\n) in cell values: ✅ Handled automatically when quoted
+ * - Quotes ("): ✅ Properly escaped as "" by PapaParse
+ *
+ * REMAINING ISSUES WE MUST HANDLE:
+ * - Dots (.) in headers: ❌ Break JavaScript object access
+ * - Special characters in headers: ❌ Break JSON/object keys
+ * - Malformed CSV structure: ❌ Need validation
+ */
+
+/**
+ * Sanitize CSV header names to prevent JavaScript object key issues
+ *
+ * Issues this prevents:
+ * 1. Dots (.) create nested object access: header["user.email"] fails
+ * 2. Brackets ([]) interfere with array access
+ * 3. Special chars break JSON.stringify/parse
+ * 4. Leading numbers make invalid JS identifiers
+ *
+ * Examples:
+ * - "user.email" → "user_email"
+ * - "data[0]" → "data_0_"
+ * - "123column" → "col_123column"
+ * - "First Name!" → "First_Name"
+ *
+ * @param {string} header - Original header name from CSV
+ * @returns {string} Sanitized header name safe for object keys
+ */
+function sanitizeHeader(header) {
+	if (!header || typeof header !== 'string') {
+		return 'unnamed_column';
+	}
+
+	let sanitized = header
+		.trim()
+		// Replace dots with underscores
+		.replace(/\./g, '_')
+		// Replace brackets with underscores (keep trailing underscore for clarity)
+		.replace(/\[/g, '_')
+		.replace(/\]/g, '_')
+		// Replace other problematic chars with underscores
+		.replace(/[^\w\s-]/g, '_')
+		// Replace whitespace with underscores
+		.replace(/\s+/g, '_')
+		// Remove consecutive underscores
+		.replace(/_+/g, '_')
+		// Remove leading underscores only (keep trailing for bracket clarity)
+		.replace(/^_+/g, '');
+
+	// Ensure doesn't start with a number
+	if (/^\d/.test(sanitized)) {
+		sanitized = 'col_' + sanitized;
+	}
+
+	// Fallback if empty after sanitization
+	if (!sanitized) {
+		return 'unnamed_column';
+	}
+
+	return sanitized;
+}
+
+
+/**
+ * Validate PapaParse results for errors
+ *
+ * @param {Object} results - PapaParse results object
+ * @param {number} rowIndex - Current row index for error reporting
+ * @throws {Error} If parsing errors are detected
+ */
+function validateParseResults(results, rowIndex) {
+	if (results.errors && results.errors.length > 0) {
+		const error = results.errors[0];
+		throw new Error(`CSV parsing error at row ${rowIndex}: ${error.message || 'Unknown error'}`);
+	}
+
+	if (results.meta && results.meta.aborted) {
+		throw new Error(`CSV parsing was aborted at row ${rowIndex}`);
+	}
+}
+
+// ============================================================
 
 
 /**
@@ -64,7 +155,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
 	storage: storage,
-	limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+	limits: { fileSize: MAX_CSV_SIZE_MB * 1024 * 1024 },
 	fileFilter: (req, file, cb) => {
 		if (file.mimetype === 'text/csv' && file.originalname.endsWith('.csv')) {
 			cb(null, true);
@@ -116,55 +207,73 @@ async function uploadCSV(req, res) {
 
 		await new Promise((resolve, reject) => {
 			Papa.parse(stream, {
-				header: false, // Manual parsing to avoid dot issues
+				header: false, // Manual parsing for full control
+				skipEmptyLines: true, // Ignore empty rows
 				step: (results) => {
-					const row = /** @type {string[]} */ (results.data);
+					try {
+						// Validate parse results for errors
+						validateParseResults(results, rowIndex);
 
-					// First row handling
-					if (rowIndex === 0) {
-						columnCount = row.length;
+						const row = /** @type {string[]} */ (results.data);
 
-						if (columnCount > 100) {
-							reject(new Error('Too many columns (max 100)'));
+						// Skip completely empty rows
+						if (!row || row.length === 0 || row.every(cell => !cell || !cell.trim())) {
 							return;
 						}
 
-						if (hasHeader) {
-							// First row is header
-							headers = row;
+						// First row handling
+						if (rowIndex === 0) {
+							columnCount = row.length;
+
+							if (columnCount > 100) {
+								reject(new Error('Too many columns (max 100)'));
+								return;
+							}
+
+							if (hasHeader) {
+								// First row is header - SANITIZE headers for safety
+								headers = row.map(h => sanitizeHeader(h));
+							} else {
+								// No header - generate column names
+								headers = row.map((_, i) => `Column_${i + 1}`);
+								// First row is data - add to preview
+								if (preview.length < 5) {
+									/** @type {Record<string, string>} */
+									const previewObj = {};
+									headers.forEach((h, i) => (previewObj[h] = row[i] || ''));
+									preview.push(previewObj);
+								}
+							}
 						} else {
-							// No header - generate column names
-							headers = row.map((_, i) => `Column ${i + 1}`);
-							// First row is data - add to preview
+							// Data rows
+							totalRows++;
+
+							if (totalRows >= MAX_CSV_ROWS) {
+								reject(new Error(`Too many rows (max ${MAX_CSV_ROWS.toLocaleString()})`));
+								return;
+							}
+
+							// Validate row has same number of columns
+							if (row.length !== columnCount) {
+								console.warn(`Row ${rowIndex + 1} has ${row.length} columns, expected ${columnCount}. Padding/truncating.`);
+							}
+
+							// Collect preview rows (skip first if it's header)
 							if (preview.length < 5) {
 								/** @type {Record<string, string>} */
 								const previewObj = {};
-								headers.forEach((h, i) => (previewObj[h] = row[i]));
+								headers.forEach((h, i) => (previewObj[h] = row[i] || ''));
 								preview.push(previewObj);
 							}
 						}
-					} else {
-						// Data rows
-						totalRows++;
 
-						if (totalRows >= 100000) {
-							reject(new Error('Too many rows (max 100,000)'));
-							return;
-						}
-
-						// Collect preview rows (skip first if it's header)
-						if (preview.length < 5) {
-							/** @type {Record<string, string>} */
-							const previewObj = {};
-							headers.forEach((h, i) => (previewObj[h] = row[i]));
-							preview.push(previewObj);
-						}
+						rowIndex++;
+					} catch (error) {
+						reject(error);
 					}
-
-					rowIndex++;
 				},
 				complete: resolve,
-				error: reject,
+				error: (error) => reject(new Error(`CSV parsing failed: ${error.message || 'Unknown error'}`)),
 			});
 		});
 

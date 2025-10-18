@@ -60,6 +60,11 @@ const RATE_LIMIT_MAX = getEnvVar('RATE_LIMIT_MAX', '100', false);
 const CORS_ORIGIN = getEnvVar('CORS_ORIGIN', 'http://localhost:5173', false);
 const BCRYPT_ROUNDS = getEnvVar('BCRYPT_ROUNDS', '12', false);
 
+// CSV upload limits
+
+const MAX_CSV_ROWS = getEnvVar('MAX_CSV_ROWS', '10000', false);
+const MAX_CSV_SIZE_MB = getEnvVar('MAX_CSV_SIZE_MB', '10', false);
+
 /**
  * Validates all required environment variables
  * @returns {boolean} True if all required variables are present
@@ -118,6 +123,10 @@ module.exports = {
 	// Security
 	CORS_ORIGIN,
 	BCRYPT_ROUNDS: parseInt(BCRYPT_ROUNDS, 10),
+
+	// CSV upload limits
+	MAX_CSV_ROWS: parseInt(MAX_CSV_ROWS, 10),
+	MAX_CSV_SIZE_MB: parseInt(MAX_CSV_SIZE_MB, 10),
 
 	// Utilities
 	getEnvVar,

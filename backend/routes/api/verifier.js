@@ -23,6 +23,7 @@ const {
 const { getVerificationStatus } = require('../../functions/route_fns/verify/verificationStatus');
 const { getVerificationResults } = require('../../functions/route_fns/verify/verificationResults');
 const { getHistory } = require('../../functions/route_fns/verify/verificationHistory');
+const { MAX_CSV_SIZE_MB } = require('../../data/env');
 
 
 // Create Express router instance
@@ -81,7 +82,27 @@ router.get('/verification/:verification_request_id/results', authenticate, getVe
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with CSV upload details
  */
-router.post('/csv/upload', authenticate, upload.single('csvFile'), uploadCSV);
+router.post('/csv/upload', authenticate, upload.single('csvFile'), (err, req, res, next) => {
+	if (err) {
+		if (err.code === 'LIMIT_FILE_SIZE') {
+			return res.status(400).json({
+				success: false,
+				message: `File too large. Maximum size is ${MAX_CSV_SIZE_MB}MB`,
+			});
+		}
+		if (err.message === 'Only CSV files allowed') {
+			return res.status(400).json({
+				success: false,
+				message: 'Only CSV files are allowed',
+			});
+		}
+		return res.status(400).json({
+			success: false,
+			message: err.message || 'File upload failed',
+		});
+	}
+	next();
+}, uploadCSV);
 
 
 /**

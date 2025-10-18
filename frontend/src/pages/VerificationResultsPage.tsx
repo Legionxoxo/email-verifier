@@ -1,9 +1,10 @@
 /**
  * Verification Results Page
  * Displays verification results with analysis and detailed email list
+ * Features infinite scroll pagination with Intersection Observer
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout';
@@ -13,6 +14,17 @@ import { ResultsList } from '../components/results/ResultsList';
 import { useAuth } from '../hooks';
 import { verificationApi } from '../lib/api';
 import type { User } from '../contexts/AuthContext';
+
+
+// ============================================================
+// INFINITE SCROLL CONFIGURATION - Modify these values as needed
+// ============================================================
+const SCROLL_CONFIG = {
+    INITIAL_PAGE: 1,              // First page to load
+    THRESHOLD: 0.8,               // Trigger at 80% scroll (20% from bottom)
+    ROOT_MARGIN: '200px',         // Start loading 200px before reaching threshold
+};
+// ============================================================
 
 
 // Email verification result interface
@@ -51,12 +63,15 @@ export function VerificationResultsPage({
     const [results, setResults] = useState<EmailVerificationResult[]>(propsResults || []);
     const [loading, setLoading] = useState<boolean>(!propsResults);
     const [error, setError] = useState<string>('');
-    const [page, setPage] = useState<number>(1);
+    const [page, setPage] = useState<number>(SCROLL_CONFIG.INITIAL_PAGE);
     const [hasMore, setHasMore] = useState<boolean>(true);
     const [isFetchingMore, setIsFetchingMore] = useState<boolean>(false);
     const [csvUploadId, setCsvUploadId] = useState<string | undefined>(undefined);
     const [listName, setListName] = useState<string | null | undefined>(undefined);
     const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
+
+    // Ref for intersection observer
+    const observerTarget = useRef<HTMLDivElement>(null);
 
     // Use props if provided (component mode), otherwise use hooks (route mode)
     const user = propsUser || authUser;
@@ -115,8 +130,8 @@ export function VerificationResultsPage({
     }, [verificationRequestId, propsResults]);
 
 
-    // Fetch more results when user scrolls
-    const fetchMoreResults = async () => {
+    // Fetch more results when user scrolls (memoized to prevent unnecessary recreations)
+    const fetchMoreResults = useCallback(async () => {
         if (isFetchingMore || !hasMore || !verificationRequestId) return;
 
         try {
@@ -149,24 +164,31 @@ export function VerificationResultsPage({
         } finally {
             setIsFetchingMore(false);
         }
-    };
+    }, [isFetchingMore, hasMore, verificationRequestId, page]);
 
 
-    // Scroll handler for infinite scroll
+    // Intersection Observer for infinite scroll (more performant than scroll events)
     useEffect(() => {
-        const handleScroll = () => {
-            // Check if user has scrolled to 20% from bottom
-            const scrollPosition = window.innerHeight + window.scrollY;
-            const threshold = document.documentElement.scrollHeight * 0.8;
+        if (!observerTarget.current || !hasMore) return;
 
-            if (scrollPosition >= threshold && !isFetchingMore && hasMore) {
-                fetchMoreResults();
+        const observer = new IntersectionObserver(
+            (entries) => {
+                // When the target element becomes visible, fetch more results
+                if (entries[0].isIntersecting && !isFetchingMore) {
+                    fetchMoreResults();
+                }
+            },
+            {
+                root: null, // viewport
+                rootMargin: SCROLL_CONFIG.ROOT_MARGIN,
+                threshold: 0.1, // Trigger when 10% of element is visible
             }
-        };
+        );
 
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [isFetchingMore, hasMore, page]);
+        observer.observe(observerTarget.current);
+
+        return () => observer.disconnect();
+    }, [fetchMoreResults, hasMore, isFetchingMore]);
 
 
     // Handle back navigation
@@ -300,6 +322,27 @@ export function VerificationResultsPage({
                                 listName={listName}
                                 originalFilename={originalFilename}
                             />
+
+                            {/* Infinite scroll trigger element */}
+                            {hasMore && (
+                                <div ref={observerTarget} className="py-4">
+                                    {isFetchingMore && (
+                                        <div className="flex justify-center items-center space-x-2">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary-500 border-t-transparent" />
+                                            <span className="text-sm text-gray-600">Loading more results...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* End of results message */}
+                            {!hasMore && results.length > 0 && (
+                                <div className="py-4 text-center">
+                                    <p className="text-sm text-gray-500">
+                                        You've reached the end of the results
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

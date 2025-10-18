@@ -1,0 +1,7 @@
+email,name,status
+
+test@example.com,John,active
+
+,,
+user@test.com,Jane,inactive
+

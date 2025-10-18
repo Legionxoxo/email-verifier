@@ -1,0 +1,6 @@
+user.email,user.name,data[0],123column,First Name!,contact@email
+"test@example.com","John Smith","Value with, comma","123","Name with special chars!","admin@test.com"
+"user2@test.com","Jane Doe
+Second Line","Quoted
+Newline","456","Another, Name!","contact@demo.com"
+"user3@domain.com","Bob ""The Builder"" Johnson","Data","789","Test","info@example.org"
