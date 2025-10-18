@@ -5,6 +5,7 @@
  * This module provides:
  * - Single email verification endpoints (verifySingleEmail)
  * - CSV bulk verification endpoints (uploadCSV, detectEmailColumn, submitCSVVerification, downloadCSVResults)
+ * - API programmatic verification endpoint (verifyApiRequest)
  * - Separate status and results endpoints for ALL verification types
  * - Verification history endpoints (getHistory)
  * - Health check endpoint
@@ -12,7 +13,10 @@
 
 const express = require('express');
 const { authenticate } = require('../../functions/middleware/auth');
+const { authenticateEither } = require('../../functions/middleware/authenticateEither');
+const { authenticateApiKey } = require('../../functions/middleware/authenticateApiKey');
 const { verifySingleEmail } = require('../../functions/route_fns/verify/singleEmailVerification');
+const { verifyApiRequest } = require('../../functions/route_fns/verify/apiVerification');
 const {
 	upload,
 	uploadCSV,
@@ -33,7 +37,7 @@ const router = express.Router();
 /**
  * POST /api/verifier/verify-single
  * Verify a single email address
- * Requires authentication
+ * Requires JWT authentication
  *
  * @function verifySingleEmail - From singleEmailVerification.js
  * @param {import('express').Request} req - Express request object
@@ -44,32 +48,51 @@ router.post('/verify-single', authenticate, verifySingleEmail);
 
 
 /**
+ * POST /api/verifier/v1/verify
+ * API v1: Programmatic email verification with API key authentication
+ * Submit multiple emails as JSON array with optional webhook URL
+ * Requires API key authentication
+ *
+ * Request body:
+ * - emails: string[] (required, 1-10000 emails)
+ * - responseUrl: string (optional, webhook URL for results)
+ *
+ * @function verifyApiRequest - From apiVerification.js
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends 202 Accepted with verification request ID
+ */
+router.post('/v1/verify', authenticateApiKey, verifyApiRequest);
+
+
+/**
  * GET /api/verifier/verification/:verification_request_id/status
  * Get verification status and progress for ANY request type (single, CSV, or API)
  * Returns ONLY status and progress information - NO results
- * Requires authentication
+ * Supports dual authentication (JWT OR API key)
  *
  * @function getVerificationStatus - From verificationStatus.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with verification status and progress
  */
-router.get('/verification/:verification_request_id/status', authenticate, getVerificationStatus);
+router.get('/verification/:verification_request_id/status', authenticateEither, getVerificationStatus);
 
 
 /**
  * GET /api/verifier/verification/:verification_request_id/results
- * Get verification results for completed verifications ONLY
- * Returns results with pagination (default 20 items per page)
- * Requires authentication
+ * Get verification results for ANY verification status
+ * While processing: returns status info (allows single-endpoint polling)
+ * When completed: returns results with pagination (default 20 items per page)
+ * Supports dual authentication (JWT OR API key)
  * Query params: ?page=1&per_page=20
  *
  * @function getVerificationResults - From verificationResults.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
- * @returns {Promise<void>} Sends JSON response with paginated verification results
+ * @returns {Promise<void>} Sends JSON response with status or paginated results
  */
-router.get('/verification/:verification_request_id/results', authenticate, getVerificationResults);
+router.get('/verification/:verification_request_id/results', authenticateEither, getVerificationResults);
 
 
 /**

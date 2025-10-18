@@ -1,16 +1,17 @@
 /**
  * Verification Results Handler
- * Handles result retrieval with DB-level pagination for completed verifications
+ * Handles result retrieval with DB-level pagination for all verification statuses
  *
  * This file contains:
  * - Result retrieval with pagination (default 20 items)
  * - DB-level LIMIT/OFFSET queries for performance
  * - CSV details integration
  * - Statistics aggregation
- * - ONLY works for completed verifications
+ * - Status information for incomplete verifications (allows single-endpoint polling)
  */
 
 const { getVerificationRequest, getCsvDetails, getVerificationResultsPaginated } = require('./verificationDB');
+const controller = require('../../verifier/controller');
 
 
 // ============================================================================
@@ -29,6 +30,14 @@ const REQUEST_TYPE = {
 	SINGLE: 'single',
 	CSV: 'csv',
 	API: 'api',
+};
+
+const PROGRESS_STEP = {
+	RECEIVED: 'received',
+	PROCESSING: 'processing',
+	ANTI_GREYLISTING: 'antiGreyListing',
+	COMPLETE: 'complete',
+	FAILED: 'failed',
 };
 
 
@@ -84,18 +93,56 @@ function buildPaginationMetadata(total, page, perPage) {
 
 
 // ============================================================================
+// STATUS HELPERS - For incomplete verifications
+// ============================================================================
+
+/**
+ * Map controller status to frontend progress step
+ * Handles greylisting detection for anti-greylisting step
+ * Pure function - no side effects
+ *
+ * @param {Object|null} controllerStatus - Status object from controller
+ * @returns {string} Progress step string for frontend
+ */
+function mapControllerStatusToProgressStep(controllerStatus) {
+	if (!controllerStatus) {
+		return PROGRESS_STEP.RECEIVED;
+	}
+
+	if (controllerStatus.status === 'completed') {
+		return PROGRESS_STEP.COMPLETE;
+	}
+
+	if (controllerStatus.status === 'failed') {
+		return PROGRESS_STEP.FAILED;
+	}
+
+	if (controllerStatus.status === 'processing' || controllerStatus.verifying) {
+		return controllerStatus.greylist_found ? PROGRESS_STEP.ANTI_GREYLISTING : PROGRESS_STEP.PROCESSING;
+	}
+
+	if (controllerStatus.status === 'queued') {
+		return PROGRESS_STEP.RECEIVED;
+	}
+
+	return PROGRESS_STEP.RECEIVED;
+}
+
+
+// ============================================================================
 // MAIN ROUTE HANDLER - Get verification results with pagination
 // ============================================================================
 
 /**
- * Get verification results for completed verifications ONLY
+ * Get verification results for ANY verification status
+ * Allows single-endpoint polling - returns status while processing, results when completed
  * Uses DB-level pagination (LIMIT/OFFSET) for performance
  * Default 20 items per page
  *
  * Flow:
  * 1. Validate inputs and authorize user
- * 2. Check if verification is completed
- * 3. Fetch paginated results from DB using LIMIT/OFFSET
+ * 2. If not completed → return status info for polling (HTTP 200)
+ * 3. If completed → fetch paginated results from DB using LIMIT/OFFSET
  * 4. Add statistics and CSV details if applicable
  * 5. Return results with pagination metadata
  *
@@ -137,15 +184,31 @@ async function getVerificationResults(req, res) {
 		}
 
 
-		// Check if verification is completed
+		// If verification is NOT completed, return status info for polling
+		// This allows single-endpoint polling: user calls /results and gets status until ready
 		if (verificationRequest.status !== 'completed') {
-			return res.status(400).json({
-				success: false,
-				message: 'Verification is not yet completed. Results are only available for completed verifications.',
+			// Poll controller for real-time status
+			const controllerStatus = await controller.getRequestStatus(verification_request_id);
+			const progressStep = mapControllerStatusToProgressStep(controllerStatus);
+
+			return res.status(200).json({
+				success: true,
+				data: {
+					verification_request_id: verificationRequest.verification_request_id,
+					request_type: verificationRequest.request_type,
+					status: verificationRequest.status,
+					progress_step: progressStep,
+					message: 'Verification in progress. Poll this endpoint to get results when complete.',
+					greylist_found: controllerStatus?.greylist_found || false,
+					blacklist_found: controllerStatus?.blacklist_found || false,
+					created_at: verificationRequest.created_at,
+					updated_at: verificationRequest.updated_at,
+				},
 			});
 		}
 
 
+		// Verification is completed - fetch and return results
 		// Parse and validate pagination parameters
 		const { page, perPage } = parsePaginationParams(req.query);
 

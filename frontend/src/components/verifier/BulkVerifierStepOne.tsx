@@ -99,12 +99,12 @@ export function BulkVerifierStepOne({
                     </div>
 
                     <Button
-                        variant="outline"
-                        onClick={handleSelectDifferentFile}
+                        variant="primary"
+                        onClick={handleUploadCSV}
+                        disabled={!listName.trim()}
                         className="w-full cursor-pointer"
                     >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Select different file
+                        Continue
                     </Button>
                 </CardContent>
             </Card>

@@ -196,9 +196,9 @@ export function APITokenPage() {
         const days = Math.floor(diff / 86400000);
 
         if (minutes < 1) return 'Just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
-        return `${days}d ago`;
+        if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+        if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+        return `${days} ${days === 1 ? 'day' : 'days'} ago`;
     };
 
     return (
@@ -447,10 +447,12 @@ export function APITokenPage() {
                                                         </Button>
                                                     </div>
 
-                                                    <div className="flex items-center space-x-4 text-xs text-gray-500">
-                                                        <span>Created {formatDate(token.created_at)}</span>
-                                                        <span>•</span>
-                                                        <span>Last used {formatRelativeTime(token.last_used)}</span>
+                                                    <div className="flex items-center space-x-4 text-xs">
+                                                        <span className="text-gray-500">Created {formatDate(token.created_at)}</span>
+                                                        <span className="text-gray-300">•</span>
+                                                        <span className="text-gray-600">
+                                                            Last used: <span className="font-medium text-blue-600">{formatRelativeTime(token.last_used)}</span>
+                                                        </span>
                                                     </div>
                                                 </div>
 

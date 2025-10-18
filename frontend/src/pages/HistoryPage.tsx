@@ -39,32 +39,42 @@ export function HistoryPage() {
 
     // State management
     const [exports, setExports] = React.useState<VerificationExport[]>([]);
-    const [filteredExports, setFilteredExports] = React.useState<VerificationExport[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const [loadingMore, setLoadingMore] = React.useState(false);
     const [error, setError] = React.useState<string>('');
     const [selectedPeriod, setSelectedPeriod] = React.useState<FilterPeriod>('this_month');
-    const [searchQuery, setSearchQuery] = React.useState('');
-    const [currentPage] = React.useState(1);
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const [hasMore, setHasMore] = React.useState(true);
+    const [total, setTotal] = React.useState(0);
 
-    // Load exports when period changes
+    // Reset and load exports when period changes
     React.useEffect(() => {
-        loadExports();
-    }, [selectedPeriod, currentPage]);
+        setCurrentPage(1);
+        setExports([]);
+        setHasMore(true);
+        loadExports(1, true);
+    }, [selectedPeriod]);
 
-    // Filter exports when search changes
+    // Load more exports when page changes
     React.useEffect(() => {
-        filterExports();
-    }, [exports, searchQuery]);
+        if (currentPage > 1) {
+            loadExports(currentPage, false);
+        }
+    }, [currentPage]);
 
-    const loadExports = async () => {
+    const loadExports = async (page: number, isReset: boolean) => {
         try {
-            setLoading(true);
+            if (isReset) {
+                setLoading(true);
+            } else {
+                setLoadingMore(true);
+            }
             setError('');
 
             // Call API with filters
             const response = await verificationApi.getHistory({
-                page: currentPage,
-                per_page: 50,
+                page: page,
+                per_page: 20,
                 period: selectedPeriod
             });
 
@@ -75,35 +85,38 @@ export function HistoryPage() {
                 ...item,
                 name: item.request_type === 'csv'
                     ? (item.list_name || item.original_filename || `CSV Upload ${item.email_count} emails`)
+                    : item.request_type === 'api'
+                    ? `API Verification`
                     : `Single Email Verification`,
                 validEmails: 0, // Will be calculated from results if available
                 date: new Date(item.created_at).toISOString()
             }));
 
-            setExports(mappedExports);
+            // Update state
+            setTotal(response.total);
+
+            if (isReset) {
+                setExports(mappedExports);
+            } else {
+                setExports(prev => [...prev, ...mappedExports]);
+            }
+
+            // Check if there are more pages
+            const totalPages = Math.ceil(response.total / response.per_page);
+            setHasMore(page < totalPages);
 
         } catch (error) {
             console.error('Failed to load verification history:', error);
             setError(error instanceof Error ? error.message : 'Failed to load verification history');
-            setExports([]);
+            if (isReset) {
+                setExports([]);
+            }
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     };
 
-    const filterExports = () => {
-        let filtered = [...exports];
-
-        // Period filtering is handled by API, only filter by search query here
-        if (searchQuery.trim()) {
-            filtered = filtered.filter(exp =>
-                exp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                exp.verification_request_id.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-        }
-
-        setFilteredExports(filtered);
-    };
 
     const handleDownload = async (verificationRequestId: string) => {
         try {
@@ -210,6 +223,22 @@ export function HistoryPage() {
         return status.charAt(0).toUpperCase() + status.slice(1);
     };
 
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        try {
+            const target = e.currentTarget;
+            const scrollPercentage = (target.scrollTop + target.clientHeight) / target.scrollHeight;
+
+            // Load more when scrolled 80% down
+            if (scrollPercentage > 0.8 && hasMore && !loadingMore && !loading) {
+                setCurrentPage(prev => prev + 1);
+            }
+        } catch (error) {
+            console.error('Scroll handler error:', error);
+        } finally {
+            // No cleanup needed
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -262,7 +291,7 @@ export function HistoryPage() {
                     </motion.div>
                 )}
 
-                {/* Filters and Search */}
+                {/* Filters */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -270,50 +299,34 @@ export function HistoryPage() {
                 >
                     <Card>
                         <CardContent className="p-0">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                {/* Period Filter Tabs */}
-                                <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={() => setSelectedPeriod('this_month')}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'this_month'
-                                            ? 'bg-gray-100 text-gray-900'
-                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        This Month
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedPeriod('last_month')}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last_month'
-                                            ? 'bg-gray-100 text-gray-900'
-                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        Last Month
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedPeriod('last_6_months')}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last_6_months'
-                                            ? 'bg-gray-100 text-gray-900'
-                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        Last 6 months
-                                    </button>
-                                </div>
-
-                                {/* Search */}
-                                <div className="relative flex-1 max-w-md">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm
-                                                 focus:outline-none focus:border-[#4169E1] transition-colors bg-white"
-                                    />
-                                </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setSelectedPeriod('this_month')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'this_month'
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    This Month
+                                </button>
+                                <button
+                                    onClick={() => setSelectedPeriod('last_month')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last_month'
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    Last Month
+                                </button>
+                                <button
+                                    onClick={() => setSelectedPeriod('last_6_months')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${selectedPeriod === 'last_6_months'
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    Last 6 months
+                                </button>
                             </div>
                         </CardContent>
                     </Card>
@@ -332,20 +345,21 @@ export function HistoryPage() {
                                     <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4" />
                                     <p className="text-gray-600">Loading verification history...</p>
                                 </div>
-                            ) : filteredExports.length === 0 ? (
+                            ) : exports.length === 0 ? (
                                 <div className="text-center py-12">
                                     <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-medium text-gray-900 mb-2">
                                         No verification exports found
                                     </h3>
                                     <p className="text-sm text-gray-600">
-                                        {searchQuery
-                                            ? 'Try adjusting your search or filter'
-                                            : 'Start verifying emails to see your history here'}
+                                        Start verifying emails to see your history here
                                     </p>
                                 </div>
                             ) : (
-                                <div className="overflow-x-auto">
+                                <div
+                                    className="overflow-x-auto max-h-[600px] overflow-y-auto"
+                                    onScroll={handleScroll}
+                                >
                                     <table className="w-full">
                                         <thead className="bg-gray-50 border-b border-gray-200">
                                             <tr>
@@ -364,7 +378,7 @@ export function HistoryPage() {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
-                                            {filteredExports.map((exp) => (
+                                            {exports.map((exp) => (
                                                 <tr
                                                     key={exp.verification_request_id}
                                                     className="hover:bg-gray-50 transition-colors cursor-pointer"
@@ -423,6 +437,23 @@ export function HistoryPage() {
                                             ))}
                                         </tbody>
                                     </table>
+
+                                    {/* Loading More Indicator */}
+                                    {loadingMore && (
+                                        <div className="text-center py-4 border-t border-gray-200">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-4 border-primary-500 border-t-transparent mx-auto mb-2" />
+                                            <p className="text-sm text-gray-600">Loading more...</p>
+                                        </div>
+                                    )}
+
+                                    {/* End of List Indicator */}
+                                    {!hasMore && exports.length > 0 && (
+                                        <div className="text-center py-4 border-t border-gray-200">
+                                            <p className="text-sm text-gray-500">
+                                                Showing all {total} verification{total !== 1 ? 's' : ''}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </CardContent>
