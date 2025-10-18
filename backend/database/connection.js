@@ -176,6 +176,7 @@ function createTables(db) {
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 is_verified BOOLEAN DEFAULT 0,
+                api_key_limit INTEGER DEFAULT 10,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -239,11 +240,28 @@ function createTables(db) {
             )
         `);
 
+		// API keys table for programmatic API access
+		const createApiKeysTable = db.prepare(`
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                key_hash TEXT NOT NULL,
+                key_prefix TEXT NOT NULL,
+                expires_at DATETIME,
+                is_revoked BOOLEAN DEFAULT 0,
+                last_used DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+        `);
+
 		// Execute table creation
 		createUsersTable.run();
 		createAuthTokensTable.run();
 		createVerificationRequestsTable.run();
 		createCsvUploadsTable.run();
+		createApiKeysTable.run();
 
 		// Create indexes for better performance
 		const createEmailIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)');
@@ -267,6 +285,9 @@ function createTables(db) {
 		const createCsvUploadStatusIndex = db.prepare(
 			'CREATE INDEX IF NOT EXISTS idx_csv_upload_status ON csv_uploads(upload_status)'
 		);
+		const createApiKeysUserIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
+		const createApiKeysHashIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash)');
+		const createApiKeysRevokedIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_revoked ON api_keys(user_id, is_revoked)');
 
 		createEmailIndex.run();
 		createTokenIndex.run();
@@ -277,6 +298,9 @@ function createTables(db) {
 		createCsvUserIndex.run();
 		createCsvVerificationIndex.run();
 		createCsvUploadStatusIndex.run();
+		createApiKeysUserIndex.run();
+		createApiKeysHashIndex.run();
+		createApiKeysRevokedIndex.run();
 
 		console.log('Database tables created successfully');
 	} catch (error) {

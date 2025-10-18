@@ -12,6 +12,7 @@ const { helmetConfig, corsConfig } = require('./functions/middleware/security');
 const authRoutes = require('./routes/api/auth');
 const settingsRoutes = require('./routes/api/settings');
 const verifierRoutes = require('./routes/api/verifier');
+const apiKeysRoutes = require('./routes/api/api-keys');
 
 // Validate environment variables on startup
 validateEnvironment();
@@ -100,6 +101,9 @@ function setupRoutes() {
 		// Verifier routes
 		app.use('/api/verifier', verifierRoutes);
 
+		// API Keys routes
+		app.use('/api/api-keys', apiKeysRoutes);
+
 		// API health check
 		app.get('/api/health', (req, res) => {
 			res.json({
@@ -110,6 +114,7 @@ function setupRoutes() {
 					authentication: 'active',
 					settings: 'active',
 					verifier: 'active',
+					apiKeys: 'active',
 				},
 				timestamp: new Date().toISOString(),
 			});
@@ -190,6 +195,7 @@ function startServer() {
 			console.log(`🔐 Authentication API: http://localhost:${port}/api/auth/health`);
 			console.log(`⚙️  Settings API: http://localhost:${port}/api/settings/health`);
 			console.log(`📧 Verifier API: http://localhost:${port}/api/verifier/health`);
+			console.log(`🔑 API Keys API: http://localhost:${port}/api/api-keys`);
 			console.log(`⚡ Environment: ${process.env.NODE_ENV || 'development'}\n`);
 		});
 	} catch (error) {
