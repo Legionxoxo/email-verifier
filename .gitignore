@@ -17,6 +17,9 @@ node_modules/
 
 # Logs
 logs
+logs/
+.logs/
+backend/.logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -44,6 +47,7 @@ dist/
 build/
 */dist/
 */build/
+backend/public/
 
 # Vite temp directory
 .vite/
@@ -118,3 +122,11 @@ docs/build/
 
 # Generated files that should not be committed
 *.generated.*
+
+# CSV files
+csv/
+backend/csv/
+
+# Legacy upload directories (old structure - no longer used)
+uploads/
+backend/uploads/

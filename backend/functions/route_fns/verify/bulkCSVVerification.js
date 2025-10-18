@@ -139,7 +139,7 @@ function validateParseResults(results, rowIndex) {
 // Configure Multer for disk storage
 const storage = multer.diskStorage({
 	destination: (req, file, cb) => {
-		const uploadDir = path.join(__dirname, '../../../uploads/raw');
+		const uploadDir = path.join(__dirname, '../../../csv');
 		if (!fs.existsSync(uploadDir)) {
 			fs.mkdirSync(uploadDir, { recursive: true });
 		}

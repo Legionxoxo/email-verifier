@@ -1,0 +1,67 @@
+# Dependencies
+**/node_modules
+**/package-lock.json
+**/yarn.lock
+**/pnpm-lock.yaml
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environment files (should be provided at runtime)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Build outputs
+**/dist
+**/build
+frontend/dist
+backend/public
+
+# Testing
+**/coverage
+**/.nyc_output
+**/__tests__
+**/*.test.js
+**/*.spec.js
+.env.test
+
+# Logs (exclude log files but keep .logs directory structure)
+**/logs
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# But we need the .logs directory structure (contents will be in volume)
+!backend/.logs/
+backend/.logs/*.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (optional - keep if you want docs in container)
+*.md
+!DOCKER.md
+
+# Database files (will be mounted as volumes)
+**/.sql/*.db
+**/.sql/*.db-*
+
+# CSV files (will be mounted as volumes)
+**/csv
+
+# Misc
+.prettierrc*
+.prettierignore
+.eslintrc*
+*.config.js
+*.config.ts
+.claude
+documentations

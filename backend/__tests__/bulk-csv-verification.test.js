@@ -67,8 +67,8 @@ describe('Bulk CSV Verification Functions Unit Tests', () => {
 
             testUserId = Number(result.lastInsertRowid);
 
-            // Create uploads directory for tests
-            uploadDir = path.join(__dirname, '..', 'uploads', 'raw');
+            // Create csv directory for tests
+            uploadDir = path.join(__dirname, '..', 'csv');
             if (!fs.existsSync(uploadDir)) {
                 fs.mkdirSync(uploadDir, { recursive: true });
             }
@@ -136,7 +136,7 @@ describe('Bulk CSV Verification Functions Unit Tests', () => {
                 global.databaseInstance = null;
             }
 
-            // Clean up uploads directory
+            // Clean up csv directory
             if (fs.existsSync(uploadDir)) {
                 const files = fs.readdirSync(uploadDir);
                 files.forEach(file => {

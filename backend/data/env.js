@@ -65,6 +65,11 @@ const BCRYPT_ROUNDS = getEnvVar('BCRYPT_ROUNDS', '12', false);
 const MAX_CSV_ROWS = getEnvVar('MAX_CSV_ROWS', '10000', false);
 const MAX_CSV_SIZE_MB = getEnvVar('MAX_CSV_SIZE_MB', '10', false);
 
+// Email verification configuration
+
+const MX_DOMAIN = getEnvVar('MX_DOMAIN', '', true);
+const EM_DOMAIN = getEnvVar('EM_DOMAIN', '', true);
+
 /**
  * Validates all required environment variables
  * @returns {boolean} True if all required variables are present
@@ -72,7 +77,7 @@ const MAX_CSV_SIZE_MB = getEnvVar('MAX_CSV_SIZE_MB', '10', false);
  */
 function validateEnvironment() {
 	try {
-		const requiredVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
+		const requiredVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MX_DOMAIN', 'EM_DOMAIN'];
 
 		const missingVars = [];
 
@@ -127,6 +132,10 @@ module.exports = {
 	// CSV upload limits
 	MAX_CSV_ROWS: parseInt(MAX_CSV_ROWS, 10),
 	MAX_CSV_SIZE_MB: parseInt(MAX_CSV_SIZE_MB, 10),
+
+	// Email verification
+	MX_DOMAIN,
+	EM_DOMAIN,
 
 	// Utilities
 	getEnvVar,

@@ -22,7 +22,6 @@ const loggerTypes = {
 	smtp3: 'smtp3',
 	antiGreylist: 'antiGreylist',
 	msLogin: 'msLogin',
-	minionReg: 'minionReg',
 };
 
 // The default system logger
@@ -180,23 +179,6 @@ winston.loggers.add(loggerTypes.msLogin, {
 		new winston.transports.File({ filename: `.logs/${loggerTypes.msLogin}.log`, level: 'debug' }),
 	],
 	defaultMeta: { service: loggerTypes.msLogin },
-});
-
-// Minion register Logger
-winston.loggers.add(loggerTypes.minionReg, {
-	level: 'debug',
-	format: combine(
-		errors({ stack: true }),
-		timestamp(),
-		json()
-		// prettyPrint() // uncomment if you want beautiful logs
-	),
-	transports: [
-		new winston.transports.Console({ level: 'error' }),
-		new winston.transports.File({ filename: `.logs/all.log`, level: 'error' }),
-		new winston.transports.File({ filename: `.logs/${loggerTypes.minionReg}.log`, level: 'debug' }),
-	],
-	defaultMeta: { service: loggerTypes.minionReg },
 });
 
 module.exports.loggerTypes = loggerTypes;
