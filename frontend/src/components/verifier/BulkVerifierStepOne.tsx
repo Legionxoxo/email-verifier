@@ -16,9 +16,7 @@ interface BulkVerifierStepOneProps {
     file: File;
     parsedData: CSVFullDataResult;
     onNext: (listName: string) => Promise<void>;
-    onSelectDifferentFile: () => void;
     onHeaderCheckboxChange: (hasHeader: boolean) => void;
-    onOpenFilePicker: () => void;
 }
 
 
@@ -31,9 +29,7 @@ export function BulkVerifierStepOne({
     file,
     parsedData,
     onNext,
-    onSelectDifferentFile,
-    onHeaderCheckboxChange,
-    onOpenFilePicker
+    onHeaderCheckboxChange
 }: BulkVerifierStepOneProps) {
     const [listName, setListName] = useState<string>(file.name.replace('.csv', ''));
     const [hasHeader, setHasHeader] = useState<boolean>(true);
@@ -53,20 +49,6 @@ export function BulkVerifierStepOne({
             onNext(listName.trim());
         } catch (error) {
             console.error('Upload CSV error:', error);
-        }
-    };
-
-
-    const handleSelectDifferentFile = () => {
-        try {
-            // Clear current file and open file picker for new upload
-            onSelectDifferentFile();
-            // Wait a tick for state to clear, then open picker
-            setTimeout(() => {
-                onOpenFilePicker();
-            }, 50);
-        } catch (error) {
-            console.error('Select different file error:', error);
         }
     };
 

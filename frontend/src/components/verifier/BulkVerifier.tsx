@@ -462,9 +462,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                     file={selectedFile}
                     parsedData={parsedData}
                     onNext={handleStepOneNext}
-                    onSelectDifferentFile={clearFile}
                     onHeaderCheckboxChange={handleHeaderCheckboxChange}
-                    onOpenFilePicker={openFilePicker}
                 />
             </div>
         );

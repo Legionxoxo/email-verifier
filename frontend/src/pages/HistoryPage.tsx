@@ -47,22 +47,7 @@ export function HistoryPage() {
     const [hasMore, setHasMore] = React.useState(true);
     const [total, setTotal] = React.useState(0);
 
-    // Reset and load exports when period changes
-    React.useEffect(() => {
-        setCurrentPage(1);
-        setExports([]);
-        setHasMore(true);
-        loadExports(1, true);
-    }, [selectedPeriod]);
-
-    // Load more exports when page changes
-    React.useEffect(() => {
-        if (currentPage > 1) {
-            loadExports(currentPage, false);
-        }
-    }, [currentPage]);
-
-    const loadExports = async (page: number, isReset: boolean) => {
+    const loadExports = React.useCallback(async (page: number, isReset: boolean) => {
         try {
             if (isReset) {
                 setLoading(true);
@@ -115,10 +100,28 @@ export function HistoryPage() {
             setLoading(false);
             setLoadingMore(false);
         }
-    };
+    }, [selectedPeriod]);
+
+    // Reset and load exports when period changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+        setExports([]);
+        setHasMore(true);
+        loadExports(1, true);
+    }, [selectedPeriod, loadExports]);
+
+    // Load more exports when page changes
+    React.useEffect(() => {
+        if (currentPage > 1) {
+            loadExports(currentPage, false);
+        }
+    }, [currentPage, loadExports]);
 
 
     const handleDownload = async (verificationRequestId: string) => {
+        let url: string | null = null;
+        let linkElement: HTMLAnchorElement | null = null;
+
         try {
             const exp = exports.find(e => e.verification_request_id === verificationRequestId);
             if (!exp || exp.request_type !== 'csv') {
@@ -142,34 +145,47 @@ export function HistoryPage() {
                 ? `${exp.list_name}.csv`
                 : (exp.original_filename || `results_${verificationRequestId}.csv`);
 
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = downloadFilename;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+            url = window.URL.createObjectURL(blob);
+            linkElement = document.createElement('a');
+            linkElement.href = url;
+            linkElement.download = downloadFilename;
+            document.body.appendChild(linkElement);
+            linkElement.click();
 
             toast.success('Download started successfully');
 
         } catch (error) {
             console.error('Failed to download export:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to download export');
+        } finally {
+            // Clean up resources
+            if (url) {
+                window.URL.revokeObjectURL(url);
+            }
+            if (linkElement && document.body.contains(linkElement)) {
+                document.body.removeChild(linkElement);
+            }
         }
     };
 
 
     const handleViewDetails = (verificationRequestId: string) => {
-        // Find the export to check its status
-        const exp = exports.find(e => e.verification_request_id === verificationRequestId);
+        try {
+            // Find the export to check its status
+            const exp = exports.find(e => e.verification_request_id === verificationRequestId);
 
-        // If completed, go directly to results page
-        // Otherwise, go to progress page for polling
-        if (exp?.status === 'completed') {
-            navigate(`/results/${verificationRequestId}`);
-        } else {
-            navigate(`/verify/${verificationRequestId}`);
+            // If completed, go directly to results page
+            // Otherwise, go to progress page for polling
+            if (exp?.status === 'completed') {
+                navigate(`/results/${verificationRequestId}`);
+            } else {
+                navigate(`/verify/${verificationRequestId}`);
+            }
+        } catch (error) {
+            console.error('View details navigation error:', error);
+            toast.error('Failed to navigate to details page');
+        } finally {
+            // No cleanup needed
         }
     };
 
@@ -226,6 +242,10 @@ export function HistoryPage() {
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         try {
             const target = e.currentTarget;
+
+            // Prevent division by zero
+            if (target.scrollHeight === 0) return;
+
             const scrollPercentage = (target.scrollTop + target.clientHeight) / target.scrollHeight;
 
             // Load more when scrolled 80% down

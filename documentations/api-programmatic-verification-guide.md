@@ -141,6 +141,9 @@ curl -X GET https://your-domain.com/api/verifier/verification/api-550e8400-e29b-
   -H "Authorization: Bearer brndnv_sk_GyJUyjWFiF0tBti7aHWdIdEnJvMPxsBy"
 ```
 
+**Performance Optimization:**
+API keys are cached in memory for 15 minutes after first use, making subsequent requests extremely fast (no database lookup needed).
+
 **While Processing (200 OK):**
 
 ```json

@@ -193,6 +193,7 @@ async function verifyApiRequest(req, res) {
 
 		// Return 202 Accepted response
 		// This indicates the request has been accepted for processing
+		// API key caching is handled in authenticateApiKey middleware for performance
 		return res.status(202).json({
 			success: true,
 			message: 'Verification request accepted',
