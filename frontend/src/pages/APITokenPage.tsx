@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Key,
     Plus,
@@ -28,6 +28,7 @@ import type { ApiKey } from '../lib/api';
  */
 export function APITokenPage() {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // State management
     const [tokens, setTokens] = React.useState<ApiKey[]>([]);
@@ -41,9 +42,23 @@ export function APITokenPage() {
     const [newToken, setNewToken] = React.useState<string>('');
     const [copiedTokenId, setCopiedTokenId] = React.useState<string>('');
 
-    // Load tokens on mount
+    // Load tokens on mount and whenever we navigate to this page
     React.useEffect(() => {
         loadTokens();
+    }, [location.pathname]);
+
+    // Also reload when page becomes visible again (handles browser tab switching)
+    React.useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                loadTokens();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, []);
 
 

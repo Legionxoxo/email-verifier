@@ -27,7 +27,7 @@ async function handleListApiKeys(req, res) {
 
         const db = getDatabase();
 
-        // Get all API keys for the user
+        // Get all active (non-revoked) API keys for the user
         const apiKeys = /** @type {Array<{
             id: number,
             name: string,
@@ -46,7 +46,7 @@ async function handleListApiKeys(req, res) {
                 last_used,
                 created_at
             FROM api_keys
-            WHERE user_id = ?
+            WHERE user_id = ? AND is_revoked = 0
             ORDER BY created_at DESC
         `).all(userId));
 
