@@ -17,6 +17,7 @@ interface BulkVerifierStepOneProps {
     parsedData: CSVFullDataResult;
     onNext: (listName: string) => Promise<void>;
     onHeaderCheckboxChange: (hasHeader: boolean) => void;
+    onCancel: () => void;
 }
 
 
@@ -29,7 +30,8 @@ export function BulkVerifierStepOne({
     file,
     parsedData,
     onNext,
-    onHeaderCheckboxChange
+    onHeaderCheckboxChange,
+    onCancel
 }: BulkVerifierStepOneProps) {
     const [listName, setListName] = useState<string>(file.name.replace('.csv', ''));
     const [hasHeader, setHasHeader] = useState<boolean>(true);
@@ -75,19 +77,6 @@ export function BulkVerifierStepOne({
                         placeholder="Enter list name..."
                         className="w-full"
                     />
-
-                    <div className="flex items-center justify-center">
-                        <span className="text-sm text-gray-500">or</span>
-                    </div>
-
-                    <Button
-                        variant="primary"
-                        onClick={handleUploadCSV}
-                        disabled={!listName.trim()}
-                        className="w-full cursor-pointer"
-                    >
-                        Continue
-                    </Button>
                 </CardContent>
             </Card>
 
@@ -159,7 +148,7 @@ export function BulkVerifierStepOne({
             <div className="flex justify-end space-x-4">
                 <Button
                     variant="outline"
-                    onClick={handleSelectDifferentFile}
+                    onClick={onCancel}
                     className="cursor-pointer"
                 >
                     Cancel

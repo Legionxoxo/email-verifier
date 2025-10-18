@@ -69,9 +69,16 @@ export function VerificationResultsPage({
     const [csvUploadId, setCsvUploadId] = useState<string | undefined>(undefined);
     const [listName, setListName] = useState<string | null | undefined>(undefined);
     const [originalFilename, setOriginalFilename] = useState<string | undefined>(undefined);
+    const [statistics, setStatistics] = useState<{
+        valid: number;
+        invalid: number;
+        catch_all: number;
+        unknown: number;
+    } | null>(null);
 
-    // Ref for intersection observer
+    // Ref for intersection observer (using callback ref for better timing)
     const observerTarget = useRef<HTMLDivElement>(null);
+    const [observerElement, setObserverElement] = useState<HTMLDivElement | null>(null);
 
     // Use props if provided (component mode), otherwise use hooks (route mode)
     const user = propsUser || authUser;
@@ -111,6 +118,11 @@ export function VerificationResultsPage({
                     setHasMore(details.pagination.has_more);
                 }
 
+                // Store statistics from API response
+                if (details.statistics) {
+                    setStatistics(details.statistics);
+                }
+
                 // Store CSV details if this is a CSV verification
                 if (details.request_type === 'csv' && details.csv_details) {
                     setCsvUploadId(details.csv_details.csv_upload_id);
@@ -137,8 +149,6 @@ export function VerificationResultsPage({
         try {
             setIsFetchingMore(true);
             const nextPage = page + 1;
-
-            console.log('Fetching more results, page:', nextPage);
 
             const details = await verificationApi.getVerificationResults(verificationRequestId, nextPage);
 
@@ -169,7 +179,8 @@ export function VerificationResultsPage({
 
     // Intersection Observer for infinite scroll (more performant than scroll events)
     useEffect(() => {
-        if (!observerTarget.current || !hasMore) return;
+        // Wait until element is available and we have more results to load
+        if (!observerElement || !hasMore) return;
 
         const observer = new IntersectionObserver(
             (entries) => {
@@ -185,10 +196,10 @@ export function VerificationResultsPage({
             }
         );
 
-        observer.observe(observerTarget.current);
+        observer.observe(observerElement);
 
         return () => observer.disconnect();
-    }, [fetchMoreResults, hasMore, isFetchingMore]);
+    }, [observerElement, fetchMoreResults, hasMore, isFetchingMore]);
 
 
     // Handle back navigation
@@ -269,20 +280,22 @@ export function VerificationResultsPage({
             );
         }
 
-        // Calculate stats
-        const totalEmails = results.length;
-        const validCount = results.filter(r => r.status === 'valid').length;
-        const invalidCount = results.filter(r => r.status === 'invalid').length;
-        const catchAllCount = results.filter(r => r.status === 'catch-all').length;
-        const unknownCount = results.filter(r => r.status === 'unknown').length;
-
-        const stats = {
-            total: totalEmails,
-            valid: validCount,
-            invalid: invalidCount,
-            catchAll: catchAllCount,
-            unknown: unknownCount
-        };
+        // Use statistics from API if available, otherwise calculate from loaded results
+        const stats = statistics
+            ? {
+                total: statistics.valid + statistics.invalid + statistics.catch_all + statistics.unknown,
+                valid: statistics.valid,
+                invalid: statistics.invalid,
+                catchAll: statistics.catch_all,
+                unknown: statistics.unknown
+            }
+            : {
+                total: results.length,
+                valid: results.filter(r => r.status === 'valid').length,
+                invalid: results.filter(r => r.status === 'invalid').length,
+                catchAll: results.filter(r => r.status === 'catch-all').length,
+                unknown: results.filter(r => r.status === 'unknown').length
+            };
 
 
         return (
@@ -317,7 +330,7 @@ export function VerificationResultsPage({
                         <div>
                             <ResultsList
                                 results={results}
-                                totalCount={totalEmails}
+                                totalCount={stats.total}
                                 csvUploadId={csvUploadId}
                                 listName={listName}
                                 originalFilename={originalFilename}
@@ -325,7 +338,13 @@ export function VerificationResultsPage({
 
                             {/* Infinite scroll trigger element */}
                             {hasMore && (
-                                <div ref={observerTarget} className="py-4">
+                                <div
+                                    ref={(el) => {
+                                        observerTarget.current = el;
+                                        setObserverElement(el);
+                                    }}
+                                    className="py-4"
+                                >
                                     {isFetchingMore && (
                                         <div className="flex justify-center items-center space-x-2">
                                             <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary-500 border-t-transparent" />

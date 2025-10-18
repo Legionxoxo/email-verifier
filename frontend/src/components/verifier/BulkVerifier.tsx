@@ -463,6 +463,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                     parsedData={parsedData}
                     onNext={handleStepOneNext}
                     onHeaderCheckboxChange={handleHeaderCheckboxChange}
+                    onCancel={clearFile}
                 />
             </div>
         );

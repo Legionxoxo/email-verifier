@@ -19,31 +19,41 @@ const { getDb } = require('../../../database/connection');
 
 
 /**
- * Calculate timestamp for period filter
+ * Calculate timestamp range for period filter
  * @param {string} period - Time period
- * @returns {number} Timestamp in milliseconds
+ * @returns {{start: number, end: number | null}} Timestamp range in milliseconds (null end means no upper bound)
  */
-function getPeriodTimestamp(period) {
+function getPeriodTimestampRange(period) {
 	const now = new Date();
 
 	switch (period) {
 		case 'this_month': {
-			// Start of current month
+			// Start of current month to now
 			const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-			return startOfMonth.getTime();
+			return {
+				start: startOfMonth.getTime(),
+				end: null // No upper bound (includes future dates in current month)
+			};
 		}
 		case 'last_month': {
-			// Start of last month
+			// Start of last month to end of last month
 			const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-			return startOfLastMonth.getTime();
+			const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1); // Start of this month = end of last month
+			return {
+				start: startOfLastMonth.getTime(),
+				end: endOfLastMonth.getTime()
+			};
 		}
 		case 'last_6_months': {
-			// 6 months ago from today
+			// 6 months ago from today to now
 			const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-			return sixMonthsAgo.getTime();
+			return {
+				start: sixMonthsAgo.getTime(),
+				end: null // No upper bound
+			};
 		}
 		default:
-			return 0; // No filter
+			return { start: 0, end: null }; // No filter
 	}
 }
 
@@ -91,10 +101,15 @@ async function getHistory(req, res) {
 
 		// Add time filter if period is specified
 		if (period) {
-			const periodTimestamp = getPeriodTimestamp(period);
-			if (periodTimestamp > 0) {
+			const periodRange = getPeriodTimestampRange(period);
+			if (periodRange.start > 0) {
 				whereClauses.push('v.created_at >= ?');
-				params.push(periodTimestamp);
+				params.push(periodRange.start);
+			}
+			// Add upper bound filter if specified (for last_month)
+			if (periodRange.end !== null) {
+				whereClauses.push('v.created_at < ?');
+				params.push(periodRange.end);
 			}
 		}
 
