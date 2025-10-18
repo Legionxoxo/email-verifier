@@ -196,13 +196,13 @@ function createTables(db) {
         `);
 
 		// Verification requests table (unified for single, CSV, API verifications)
+		// emails column stores: string[] during pending/processing, results[] after completion
 		const createVerificationRequestsTable = db.prepare(`
             CREATE TABLE IF NOT EXISTS verification_requests (
                 verification_request_id TEXT PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 request_type TEXT CHECK(request_type IN ('single', 'csv', 'api')) NOT NULL,
                 emails TEXT NOT NULL,
-                results TEXT,
                 statistics TEXT,
                 status TEXT CHECK(status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
                 created_at INTEGER NOT NULL,

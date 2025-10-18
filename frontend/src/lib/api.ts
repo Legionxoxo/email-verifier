@@ -869,6 +869,9 @@ export interface VerificationHistoryItem {
     list_name?: string | null;
     original_filename?: string;
     file_size?: number;
+    status_url?: string;
+    results_url?: string | null;
+    download_url?: string | null;
 }
 
 /**
@@ -1018,22 +1021,17 @@ export const verificationApi = {
     },
 
     /**
-     * Get verification request details
-     * Retrieves full details of a verification request including results
+     * Get verification status
+     * Retrieves only status and progress information, NO results
+     * Use this for polling verification progress
      *
      * @param {string} verificationRequestId - Verification request ID
-     * @param {number} page - Page number for pagination (default: 1)
-     * @param {number} perPage - Results per page (default: 50)
-     * @returns {Promise<VerificationRequest>} Promise resolving to verification details
+     * @returns {Promise<VerificationRequest>} Promise resolving to verification status
      * @throws {Error} If request not found or retrieval fails
      */
-    async getVerificationDetails(verificationRequestId: string, page: number = 1, perPage: number = 50): Promise<VerificationRequest> {
+    async getVerificationStatus(verificationRequestId: string): Promise<VerificationRequest> {
         try {
-            const queryParams = new URLSearchParams();
-            queryParams.append('page', page.toString());
-            queryParams.append('per_page', perPage.toString());
-
-            const url = `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}?${queryParams.toString()}`;
+            const url = `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}/status`;
 
             const response = await axiosGet<{
                 success: boolean;
@@ -1044,7 +1042,7 @@ export const verificationApi = {
             );
 
             if (!response.success || !response.data) {
-                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to get verification details');
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to get verification status');
                 (error as any).status = response.status;
                 throw error;
             }
@@ -1052,7 +1050,49 @@ export const verificationApi = {
             return response.data.data;
 
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to get verification details';
+            const message = error instanceof Error ? error.message : 'Failed to get verification status';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        }
+    },
+
+    /**
+     * Get verification results
+     * Retrieves paginated results for completed verifications
+     * Use this to fetch results after verification is complete
+     *
+     * @param {string} verificationRequestId - Verification request ID
+     * @param {number} page - Page number for pagination (default: 1)
+     * @param {number} perPage - Results per page (default: 20)
+     * @returns {Promise<VerificationRequest>} Promise resolving to verification results
+     * @throws {Error} If request not found or verification not completed
+     */
+    async getVerificationResults(verificationRequestId: string, page: number = 1, perPage: number = 20): Promise<VerificationRequest> {
+        try {
+            const queryParams = new URLSearchParams();
+            queryParams.append('page', page.toString());
+            queryParams.append('per_page', perPage.toString());
+
+            const url = `${config.api.baseUrl}/api/verifier/verification/${verificationRequestId}/results?${queryParams.toString()}`;
+
+            const response = await axiosGet<{
+                success: boolean;
+                data: VerificationRequest;
+            }>(
+                url,
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to get verification results');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to get verification results';
             const statusCode = (error as any)?.status;
             throw new Error(formatErrorMessage(message, statusCode));
         }

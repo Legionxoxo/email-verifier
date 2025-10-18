@@ -29,7 +29,7 @@ describe('Database Integration Tests', () => {
             }
 
             // Set test environment variable
-            process.env.DB_PATH = '.sql/test.db';
+            process.env.DB_PATH = '.sql/user_auth_test.db';
 
             // Initialize isolated test database
             db = createTestDatabase(testDbPath);

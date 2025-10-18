@@ -8,6 +8,7 @@ const stateVariables = require('../../data/stateVariables');
 const sqlAsync = require('../../database/sqlAsync');
 const antiGreylisting = require('./antiGreylisting');
 const { axiosPost } = require('../utils/axios');
+const { updateVerificationResults } = require('../route_fns/verify/verificationDB');
 
 /**
  * @typedef {Object} RequestObj
@@ -471,7 +472,7 @@ class Controller {
 				const resultArr = Array.from(finalResult.values()),
 					resultLen = resultArr?.length || 0;
 
-				// mark the request as completed in the database
+				// mark the request as completed in the controller database (controller0Results)
 				await this.updateResultsDB(request_id, {
 					status: 'completed',
 					results: JSON.stringify(resultArr),
@@ -480,7 +481,16 @@ class Controller {
 					completed_at: new Date().getTime(),
 				});
 
-				this.logger.debug(`Request ${request_id} marked as completed in database`);
+				this.logger.debug(`Request ${request_id} marked as completed in controller database`);
+
+				// ALSO update the verification_requests table for frontend access
+				try {
+					const transformedResults = this.transformResultsForAPI(resultArr);
+					await updateVerificationResults(request_id, transformedResults);
+					this.logger.debug(`Request ${request_id} synced to verification_requests table`);
+				} catch (error) {
+					this.logger.error(`Failed to sync results to verification_requests: ${error?.toString()}`);
+				}
 
 				// send the request to the client via webhook callback if response_url is provided
 				const response_url = this.request_assignments[workerIndex]?.response_url;
@@ -662,6 +672,42 @@ class Controller {
 			this.logger.error(`getRequestResults() error -> ${error?.toString()}`);
 			return null;
 		}
+	}
+
+	/**
+	 * Transform controller results to API format for verification_requests table
+	 * @param {VerificationObj[]} results - Raw controller results
+	 * @returns {Array<{email: string, status: string, message: string}>}
+	 */
+	transformResultsForAPI(results) {
+		return results.map(result => {
+			let status, message;
+
+			if (result.error) {
+				status = 'unknown';
+				message = result.error_msg || 'Verification error';
+			} else if (result.smtp.deliverable) {
+				status = 'valid';
+				message = 'Email verified successfully';
+			} else if (result.smtp.catch_all) {
+				status = 'catch-all';
+				message = 'Domain accepts all emails (catch-all)';
+			} else if (result.smtp.full_inbox) {
+				status = 'invalid';
+				message = 'Mailbox is full';
+			} else if (result.smtp.disabled) {
+				status = 'invalid';
+				message = 'Mailbox is disabled';
+			} else if (!result.has_mx_records) {
+				status = 'invalid';
+				message = 'No MX records found for domain';
+			} else {
+				status = 'invalid';
+				message = result.error_msg || 'Email not deliverable';
+			}
+
+			return { email: result.email, status, message };
+		});
 	}
 
 	/**

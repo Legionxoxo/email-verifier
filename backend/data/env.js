@@ -31,7 +31,7 @@ function getEnvVar(key, defaultValue = null, required = true) {
 
 // Database configuration
 
-const DB_PATH = getEnvVar('DB_PATH', '.sql/auth.db', false);
+const DB_PATH = getEnvVar('DB_PATH', '.sql/user_auth.db', false);
 
 // Server configuration
 

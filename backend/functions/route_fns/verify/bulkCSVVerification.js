@@ -1,6 +1,9 @@
 /**
  * Bulk CSV email verification route functions
- * Handles CSV upload, email detection, and verification
+ * Handles ONLY CSV-specific operations: upload, email detection, and submission
+ *
+ * For status checking, see verificationStatus.js
+ * For results retrieval, see verificationResults.js
  */
 
 const { v4: uuidv4 } = require('uuid');
@@ -9,13 +12,8 @@ const path = require('path');
 const Papa = require('papaparse');
 const multer = require('multer');
 const queue = require('../../staging/queue');
-const controller = require('../../verifier/controller');
 const { getDb } = require('../../../database/connection');
-const {
-	createVerificationRequest,
-	updateVerificationStatus,
-	updateVerificationResults,
-} = require('./verificationDB');
+const { createVerificationRequest, updateVerificationStatus } = require('./verificationDB');
 
 
 /**
@@ -605,7 +603,7 @@ async function downloadCSVResults(req, res) {
 			db
 				.prepare(
 					`
-            SELECT c.*, v.results
+            SELECT c.*, v.emails as results
             FROM csv_uploads c
             LEFT JOIN verification_requests v ON c.verification_request_id = v.verification_request_id
             WHERE c.csv_upload_id = ? AND c.user_id = ?
@@ -628,7 +626,7 @@ async function downloadCSVResults(req, res) {
 			});
 		}
 
-		// Parse results
+		// Parse results (stored in emails column after completion)
 		const resultsArray = upload.results ? JSON.parse(upload.results) : [];
 
 		if (resultsArray.length === 0) {

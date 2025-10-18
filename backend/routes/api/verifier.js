@@ -3,15 +3,16 @@
  * Provides endpoints for email verification status and results queries
  *
  * This module provides:
- * - Request status tracking
- * - Results retrieval for completed verifications
+ * - Single email verification endpoints (verifySingleEmail)
+ * - CSV bulk verification endpoints (uploadCSV, detectEmailColumn, submitCSVVerification, downloadCSVResults)
+ * - Separate status and results endpoints for ALL verification types
+ * - Verification history endpoints (getHistory)
  * - Health check endpoint
  */
 
 const express = require('express');
-const controller = require('../../functions/verifier/controller');
 const { authenticate } = require('../../functions/middleware/auth');
-const { verifySingleEmail, getVerificationStatus } = require('../../functions/route_fns/verify/singleEmailVerification');
+const { verifySingleEmail } = require('../../functions/route_fns/verify/singleEmailVerification');
 const {
 	upload,
 	uploadCSV,
@@ -19,6 +20,8 @@ const {
 	submitCSVVerification,
 	downloadCSVResults,
 } = require('../../functions/route_fns/verify/bulkCSVVerification');
+const { getVerificationStatus } = require('../../functions/route_fns/verify/verificationStatus');
+const { getVerificationResults } = require('../../functions/route_fns/verify/verificationResults');
 const { getHistory } = require('../../functions/route_fns/verify/verificationHistory');
 
 
@@ -31,6 +34,7 @@ const router = express.Router();
  * Verify a single email address
  * Requires authentication
  *
+ * @function verifySingleEmail - From singleEmailVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with verification request ID
@@ -39,15 +43,32 @@ router.post('/verify-single', authenticate, verifySingleEmail);
 
 
 /**
- * GET /api/verifier/verification/:verification_request_id
- * Get verification status and results for a specific request
+ * GET /api/verifier/verification/:verification_request_id/status
+ * Get verification status and progress for ANY request type (single, CSV, or API)
+ * Returns ONLY status and progress information - NO results
  * Requires authentication
  *
+ * @function getVerificationStatus - From verificationStatus.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
- * @returns {Promise<void>} Sends JSON response with verification status and results
+ * @returns {Promise<void>} Sends JSON response with verification status and progress
  */
-router.get('/verification/:verification_request_id', authenticate, getVerificationStatus);
+router.get('/verification/:verification_request_id/status', authenticate, getVerificationStatus);
+
+
+/**
+ * GET /api/verifier/verification/:verification_request_id/results
+ * Get verification results for completed verifications ONLY
+ * Returns results with pagination (default 20 items per page)
+ * Requires authentication
+ * Query params: ?page=1&per_page=20
+ *
+ * @function getVerificationResults - From verificationResults.js
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Response} res - Express response object
+ * @returns {Promise<void>} Sends JSON response with paginated verification results
+ */
+router.get('/verification/:verification_request_id/results', authenticate, getVerificationResults);
 
 
 /**
@@ -55,6 +76,7 @@ router.get('/verification/:verification_request_id', authenticate, getVerificati
  * Upload CSV file for email verification
  * Requires authentication and multipart/form-data
  *
+ * @function uploadCSV - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with CSV upload details
@@ -67,6 +89,7 @@ router.post('/csv/upload', authenticate, upload.single('csvFile'), uploadCSV);
  * Detect email column in uploaded CSV
  * Requires authentication
  *
+ * @function detectEmailColumn - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with detected email column
@@ -79,6 +102,7 @@ router.post('/csv/detect-email', authenticate, detectEmailColumn);
  * Submit CSV for email verification
  * Requires authentication
  *
+ * @function submitCSVVerification - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with verification request details
@@ -91,6 +115,7 @@ router.post('/csv/verify', authenticate, submitCSVVerification);
  * Download CSV with verification results
  * Requires authentication
  *
+ * @function downloadCSVResults - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends CSV file with results
@@ -113,108 +138,14 @@ router.get('/history', authenticate, getHistory);
 
 
 /**
- * GET /api/verifier/status/:request_id
- * Get the status of an email verification request
- *
- * @param {import('express').Request} req - Express request object
- * @param {import('express').Response} res - Express response object
- * @returns {Promise<void>} Sends status JSON response
- */
-router.get('/status/:request_id', async (req, res) => {
-	try {
-		const { request_id } = req.params;
-
-		if (!request_id) {
-			return res.status(400).json({
-				success: false,
-				message: 'Request ID is required'
-			});
-		}
-
-		const status = await controller.getRequestStatus(request_id);
-
-		if (!status) {
-			return res.status(404).json({
-				success: false,
-				message: 'Request not found'
-			});
-		}
-
-		return res.json({
-			success: true,
-			data: status
-		});
-
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error('Get status error:', errorMessage);
-
-		return res.status(500).json({
-			success: false,
-			message: 'Internal server error occurred'
-		});
-	} finally {
-		console.debug('Get status request completed');
-	}
-});
-
-
-/**
- * GET /api/verifier/results/:request_id
- * Get the results of a completed email verification request
- *
- * @param {import('express').Request} req - Express request object
- * @param {import('express').Response} res - Express response object
- * @returns {Promise<void>} Sends results JSON response
- */
-router.get('/results/:request_id', async (req, res) => {
-	try {
-		const { request_id } = req.params;
-
-		if (!request_id) {
-			return res.status(400).json({
-				success: false,
-				message: 'Request ID is required'
-			});
-		}
-
-		const results = await controller.getRequestResults(request_id);
-
-		if (!results) {
-			return res.status(404).json({
-				success: false,
-				message: 'Results not found or verification not yet completed'
-			});
-		}
-
-		return res.json({
-			success: true,
-			data: results
-		});
-
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error('Get results error:', errorMessage);
-
-		return res.status(500).json({
-			success: false,
-			message: 'Internal server error occurred'
-		});
-	} finally {
-		console.debug('Get results request completed');
-	}
-});
-
-
-/**
  * GET /api/verifier/health
  * Health check endpoint for verifier service monitoring
  *
- * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request} _req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends health status JSON response
  */
-router.get('/health', (req, res) => {
+router.get('/health', (_req, res) => {
 	try {
 		const healthData = {
 			success: true,
@@ -254,10 +185,10 @@ router.get('/health', (req, res) => {
  * @param {Error} error - Error object
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
- * @param {import('express').NextFunction} next - Express next function
+ * @param {import('express').NextFunction} _next - Express next function
  * @returns {Promise<void>} Sends error response or calls next
  */
-router.use((error, req, res, next) => {
+router.use((error, req, res, _next) => {
 	try {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		const requestInfo = {

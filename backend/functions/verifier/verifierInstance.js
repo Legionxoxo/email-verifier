@@ -18,6 +18,7 @@ const microsoftEmailDomains = require('../../data/lists/microsoftEmailDomains');
 const yahooEmailDomains = require('../../data/lists/yahooEmailDomains');
 const MXOrganizationClassifier = require('./utils/mxOrganizationClassifier');
 const MXProcessingProfiles = require('./utils/mxProcessingProfiles');
+const { generateMockSmtpResults } = require('./utils/mockSmtpGenerator');
 
 /**
  * This class is used to create a verifier instance
@@ -380,8 +381,18 @@ class VerifierInstance {
 							/** @type {Map<string, any>} */
 							let smtpResult;
 							try {
-								const smtpVerification = new SMTPVerificationSC(workerData?.index);
-								smtpResult = await smtpVerification.check(emailsInGroup, mx_records);
+								// Check if mock SMTP mode is enabled
+								const mockSmtpMode = process.env.MOCK_SMTP_MODE === 'true';
+
+								if (mockSmtpMode) {
+									// Use mock SMTP responses
+									this.logger.info(`[MOCK MODE] Generating mock SMTP results for ${emailsInGroup.length} emails`);
+									smtpResult = await generateMockSmtpResults(emailsInGroup, mx_records);
+								} else {
+									// Use real SMTP verification
+									const smtpVerification = new SMTPVerificationSC(workerData?.index);
+									smtpResult = await smtpVerification.check(emailsInGroup, mx_records);
+								}
 							} catch (smtpError) {
 								this.logger.error(
 									`SMTP verification failed for organization ${orgGroup.organization}, batch ${i}:`,

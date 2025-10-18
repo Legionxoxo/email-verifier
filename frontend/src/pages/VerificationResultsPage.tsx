@@ -74,8 +74,8 @@ export function VerificationResultsPage({
 
                 console.log('Fetching verification results for:', verificationRequestId);
 
-                const details = await verificationApi.getVerificationDetails(verificationRequestId);
-                console.log('Verification details:', details);
+                const details = await verificationApi.getVerificationResults(verificationRequestId, page);
+                console.log('Verification results:', details);
 
                 if (details.status !== 'completed') {
                     setError('Verification is not completed yet');
@@ -125,7 +125,7 @@ export function VerificationResultsPage({
 
             console.log('Fetching more results, page:', nextPage);
 
-            const details = await verificationApi.getVerificationDetails(verificationRequestId, nextPage);
+            const details = await verificationApi.getVerificationResults(verificationRequestId, nextPage);
 
             if (details.results && details.results.length > 0) {
                 const mappedResults: EmailVerificationResult[] = details.results.map(r => ({

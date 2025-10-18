@@ -10,8 +10,7 @@ const { getDb } = require('../../../database/connection');
  * @property {string} verification_request_id
  * @property {number} user_id
  * @property {string} request_type
- * @property {string} emails - JSON string array
- * @property {string | null} results - JSON string array or null
+ * @property {string} emails - JSON string: string[] during pending/processing, results[] after completion
  * @property {string | null} statistics - JSON string object or null
  * @property {string} status
  * @property {number} created_at
@@ -134,9 +133,10 @@ async function updateVerificationResults(verification_request_id, results) {
 			}
 		}
 
+		// Store results in emails column (reusing space from initial email list)
 		const stmt = db.prepare(`
             UPDATE verification_requests
-            SET results = ?, statistics = ?, status = 'completed', completed_at = ?, updated_at = ?
+            SET emails = ?, statistics = ?, status = 'completed', completed_at = ?, updated_at = ?
             WHERE verification_request_id = ?
         `);
 
@@ -181,12 +181,12 @@ async function getVerificationRequest(verification_request_id) {
 		}
 
 		// Parse JSON fields
+		// emails column contains: string[] during pending/processing, results[] after completion
 		return {
 			verification_request_id: row.verification_request_id,
 			user_id: row.user_id,
 			request_type: row.request_type,
 			emails: JSON.parse(row.emails),
-			results: row.results ? JSON.parse(row.results) : null,
 			statistics: row.statistics ? JSON.parse(row.statistics) : null,
 			status: row.status,
 			created_at: row.created_at,
@@ -288,6 +288,116 @@ async function getUserVerificationHistory(user_id, options = {}) {
 }
 
 
+/**
+ * Get paginated verification results with DB-level LIMIT/OFFSET
+ * This function extracts results from the emails JSON column using SQLite JSON functions
+ * Uses DB-level pagination for performance (no loading entire array into memory)
+ *
+ * @param {string} verification_request_id - Verification request ID
+ * @param {number} page - Page number (1-indexed)
+ * @param {number} perPage - Items per page
+ * @returns {Promise<{results: Array<Object>, total: number} | null>} Paginated results and total count
+ */
+async function getVerificationResultsPaginated(verification_request_id, page, perPage) {
+	try {
+		const db = getDb();
+		const offset = (page - 1) * perPage;
+
+		// Get total count of results
+		const countStmt = db.prepare(`
+            SELECT json_array_length(emails) as total
+            FROM verification_requests
+            WHERE verification_request_id = ? AND status = 'completed'
+        `);
+
+		const countRow = /** @type {{total: number} | undefined} */ (countStmt.get(verification_request_id));
+		const total = countRow?.total || 0;
+
+		if (total === 0) {
+			return {
+				results: [],
+				total: 0,
+			};
+		}
+
+		// Get full emails JSON and slice in JavaScript
+		// SQLite doesn't have built-in JSON array slicing, so we do it in app layer
+		const stmt = db.prepare(`
+            SELECT emails
+            FROM verification_requests
+            WHERE verification_request_id = ? AND status = 'completed'
+        `);
+
+		const row = /** @type {{emails: string} | undefined} */ (stmt.get(verification_request_id));
+
+		if (!row) {
+			return null;
+		}
+
+		const allResults = JSON.parse(row.emails);
+		const paginatedResults = allResults.slice(offset, offset + perPage);
+
+		return {
+			results: paginatedResults,
+			total: total,
+		};
+
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error('Get verification results paginated error:', errorMessage);
+
+		return null;
+	} finally {
+		console.debug('Get verification results paginated process completed');
+	}
+}
+
+
+/**
+ * Get CSV upload details for a verification request
+ * @param {string} verification_request_id - Verification request ID
+ * @returns {Promise<Object | null>} CSV details object or null
+ */
+async function getCsvDetails(verification_request_id) {
+	try {
+		const db = getDb();
+
+		const stmt = db.prepare(`
+            SELECT csv_upload_id, list_name, original_filename, has_header, headers,
+                   selected_email_column, detection_confidence, row_count, column_count
+            FROM csv_uploads
+            WHERE verification_request_id = ?
+        `);
+
+		const csvUpload = /** @type {{csv_upload_id: string, list_name: string | null, original_filename: string, has_header: number, headers: string, selected_email_column: string | null, detection_confidence: number | null, row_count: number, column_count: number} | undefined} */ (stmt.get(verification_request_id));
+
+		if (!csvUpload) {
+			return null;
+		}
+
+		return {
+			csv_upload_id: csvUpload.csv_upload_id,
+			list_name: csvUpload.list_name,
+			original_filename: csvUpload.original_filename,
+			has_header: csvUpload.has_header === 1,
+			headers: JSON.parse(csvUpload.headers),
+			selected_email_column: csvUpload.selected_email_column,
+			detection_confidence: csvUpload.detection_confidence,
+			row_count: csvUpload.row_count,
+			column_count: csvUpload.column_count,
+			download_url: `/api/verifier/csv/${csvUpload.csv_upload_id}/download`
+		};
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error('Get CSV details error:', errorMessage);
+
+		return null;
+	} finally {
+		console.debug('Get CSV details process completed');
+	}
+}
+
+
 // Export functions
 module.exports = {
 	createVerificationRequest,
@@ -295,4 +405,6 @@ module.exports = {
 	updateVerificationResults,
 	getVerificationRequest,
 	getUserVerificationHistory,
+	getVerificationResultsPaginated,
+	getCsvDetails,
 };

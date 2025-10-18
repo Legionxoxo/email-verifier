@@ -81,9 +81,9 @@ export function VerificationProgressPage() {
             try {
                 console.log('Polling verification status for:', verificationRequestId);
 
-                // Fetch verification details
-                const details = await verificationApi.getVerificationDetails(verificationRequestId);
-                console.log('Verification details:', details);
+                // Fetch verification status (status only, no results)
+                const details = await verificationApi.getVerificationStatus(verificationRequestId);
+                console.log('Verification status:', details);
 
                 if (!isMounted) return;
 

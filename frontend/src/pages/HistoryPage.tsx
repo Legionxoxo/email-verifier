@@ -113,22 +113,21 @@ export function HistoryPage() {
                 return;
             }
 
-            // Get verification details to find csv_upload_id
-            const details = await verificationApi.getVerificationDetails(verificationRequestId);
-            if (!details.csv_details) {
-                toast.error('CSV details not found');
+            // Use csv_upload_id from history item if available
+            if (!exp.csv_upload_id) {
+                toast.error('CSV upload ID not found');
                 return;
             }
 
             toast.info(`Downloading ${exp.name}...`);
 
             // Download CSV results
-            const blob = await verificationApi.downloadCSVResults(details.csv_details.csv_upload_id);
+            const blob = await verificationApi.downloadCSVResults(exp.csv_upload_id);
 
             // Create download link using list_name if available
-            const downloadFilename = details.csv_details.list_name
-                ? `${details.csv_details.list_name}.csv`
-                : (details.csv_details.original_filename || `results_${verificationRequestId}.csv`);
+            const downloadFilename = exp.list_name
+                ? `${exp.list_name}.csv`
+                : (exp.original_filename || `results_${verificationRequestId}.csv`);
 
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');

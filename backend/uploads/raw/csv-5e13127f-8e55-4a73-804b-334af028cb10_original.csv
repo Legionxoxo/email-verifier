@@ -1,0 +1,7 @@
+column1,column2,status,status_reason
+name,email,invalid,No MX records found for domain
+Legion X,legionx@example.com,invalid,Email not deliverable
+Alex Patel,alex.patel@gmail.com,valid,Email verified successfully
+Support Team,support@acme-corp.com,invalid,No MX records found for domain
+Temp User,tempuser@mailinator.com,invalid,No MX records found for domain
+Invalid Format,invalid-email@.com,invalid,No MX records found for domain

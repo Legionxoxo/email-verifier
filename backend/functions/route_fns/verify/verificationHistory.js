@@ -1,6 +1,10 @@
 /**
  * Verification history route functions
  * Handles retrieving verification history for users
+ *
+ * Each history item contains a verification_request_id that can be used with:
+ * - GET /api/verifier/verification/:verification_request_id/status - For current status
+ * - GET /api/verifier/verification/:verification_request_id/results - For results (completed only)
  */
 
 const { getDb } = require('../../../database/connection');
@@ -126,12 +130,26 @@ async function getHistory(req, res) {
             LIMIT ? OFFSET ?
         `);
 
-		const rows = stmt.all(...params, per_page, offset);
+		const rows = /** @type {Array<{verification_request_id: string, request_type: string, status: string, email_count: number, created_at: number, updated_at: number, completed_at: number | null, csv_upload_id: string | null, list_name: string | null, original_filename: string | null, file_size: number | null}>} */ (stmt.all(...params, per_page, offset));
+
+		// Add helpful metadata for frontend to know which endpoints to use
+		const requestsWithMetadata = rows.map(row => ({
+			...row,
+			// URLs for accessing status and results
+			status_url: `/api/verifier/verification/${row.verification_request_id}/status`,
+			results_url: row.status === 'completed'
+				? `/api/verifier/verification/${row.verification_request_id}/results`
+				: null, // Results only available for completed verifications
+			// Download URL for CSV verifications
+			download_url: row.csv_upload_id && row.status === 'completed'
+				? `/api/verifier/csv/${row.csv_upload_id}/download`
+				: null,
+		}));
 
 		return res.json({
 			success: true,
 			data: {
-				requests: rows,
+				requests: requestsWithMetadata,
 				total: total,
 				page: page,
 				per_page: per_page,
