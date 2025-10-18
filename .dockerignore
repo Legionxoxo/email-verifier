@@ -61,7 +61,9 @@ backend/.logs/*.log
 .prettierrc*
 .prettierignore
 .eslintrc*
-*.config.js
-*.config.ts
 .claude
 documentations
+
+# Config files - exclude some but keep build-critical ones
+backend/jest.config.js
+# Keep frontend/*.config.* files (vite, tailwind, etc.) - needed for build
