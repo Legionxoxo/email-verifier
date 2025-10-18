@@ -9,7 +9,7 @@
  * - Automatic token management and refresh
  */
 
-import { axiosGet, axiosPost, axiosPut } from './axios';
+import { axiosGet, axiosPost, axiosPut, axiosDelete } from './axios';
 import { config } from '../data/env';
 import { formatErrorMessage } from './utils';
 
@@ -733,6 +733,67 @@ export const authApi = {
 };
 
 
+// API Key Management Types
+
+/**
+ * API key interface
+ * Represents an API key in the list view (with masked key)
+ */
+export interface ApiKey {
+    id: number;
+    name: string;
+    key_masked: string;
+    expires_at: string | null;
+    is_revoked: boolean;
+    last_used: string | null;
+    created_at: string;
+}
+
+/**
+ * Create API key response interface
+ * Returned after successfully creating a new API key
+ */
+export interface CreateApiKeyResponse {
+    success: boolean;
+    message: string;
+    data: {
+        apiKey: string;
+        keyData: {
+            id: number;
+            name: string;
+            key_prefix: string;
+            expires_at: string | null;
+            created_at: string;
+        };
+    };
+}
+
+/**
+ * List API keys response interface
+ * Contains list of all API keys for a user
+ */
+export interface ListApiKeysResponse {
+    success: boolean;
+    data: {
+        apiKeys: ApiKey[];
+    };
+}
+
+/**
+ * Revoke API key response interface
+ * Confirmation of API key revocation
+ */
+export interface RevokeApiKeyResponse {
+    success: boolean;
+    message: string;
+    data: {
+        id: number;
+        name: string;
+        revoked_at: string;
+    };
+}
+
+
 // CSV Verification API Types
 
 /**
@@ -1234,6 +1295,118 @@ export const verificationApi = {
             const statusCode = (error as any)?.status;
             const validationErrors = (error as any)?.validationErrors;
             throw new Error(formatErrorMessage(message, statusCode, validationErrors));
+        }
+    },
+};
+
+
+// API Key Management API Operations
+
+/**
+ * API Key Management API functions with comprehensive error handling
+ * Provides all API key management operations
+ */
+export const apiKeyApi = {
+    /**
+     * Create a new API key
+     * Generates new API key with optional expiry
+     *
+     * @param {string} name - Descriptive name for the API key
+     * @param {number | null} expiryDays - Number of days until expiry (null for no expiry)
+     * @returns {Promise<CreateApiKeyResponse['data']>} Promise resolving to API key and metadata
+     * @throws {Error} If creation fails or user has reached maximum limit
+     */
+    async createApiKey(name: string, expiryDays: number | null = null): Promise<CreateApiKeyResponse['data']> {
+        try {
+            const requestBody: { name: string; expiryDays?: number } = { name };
+            if (expiryDays !== null) {
+                requestBody.expiryDays = expiryDays;
+            }
+
+            const response = await axiosPost<CreateApiKeyResponse>(
+                `${config.api.baseUrl}/api/api-keys/create`,
+                requestBody,
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to create API key');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create API key';
+            const statusCode = (error as any)?.status;
+            const validationErrors = (error as any)?.validationErrors;
+            throw new Error(formatErrorMessage(message, statusCode, validationErrors));
+        } finally {
+            // Debug logging omitted for production
+        }
+    },
+
+    /**
+     * List all API keys for the authenticated user
+     * Returns masked API keys with metadata
+     *
+     * @returns {Promise<ApiKey[]>} Promise resolving to list of API keys
+     * @throws {Error} If retrieval fails
+     */
+    async listApiKeys(): Promise<ApiKey[]> {
+        try {
+            const response = await axiosGet<ListApiKeysResponse>(
+                `${config.api.baseUrl}/api/api-keys`,
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to list API keys');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data.data.apiKeys;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to list API keys';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        } finally {
+            // Debug logging omitted for production
+        }
+    },
+
+    /**
+     * Revoke an API key by ID
+     * Permanently revokes an API key (cannot be undone)
+     *
+     * @param {number} keyId - The API key ID to revoke
+     * @returns {Promise<RevokeApiKeyResponse['data']>} Promise resolving to revocation confirmation
+     * @throws {Error} If revocation fails or key doesn't belong to user
+     */
+    async revokeApiKey(keyId: number): Promise<RevokeApiKeyResponse['data']> {
+        try {
+            const response = await axiosDelete<RevokeApiKeyResponse>(
+                `${config.api.baseUrl}/api/api-keys/${keyId}/revoke`,
+                { headers: getAuthHeaders() }
+            );
+
+            if (!response.success || !response.data) {
+                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Failed to revoke API key');
+                (error as any).status = response.status;
+                throw error;
+            }
+
+            return response.data.data;
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to revoke API key';
+            const statusCode = (error as any)?.status;
+            throw new Error(formatErrorMessage(message, statusCode));
+        } finally {
+            // Debug logging omitted for production
         }
     },
 };

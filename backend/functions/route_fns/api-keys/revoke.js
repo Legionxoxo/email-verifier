@@ -63,11 +63,11 @@ async function handleRevokeApiKey(req, res) {
             });
         }
 
-        // Check if already revoked
+        // Check if already revoked (treat as not found for security)
         if (apiKey.is_revoked === 1) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
-                message: 'API key is already revoked.'
+                message: 'API key not found or already revoked.'
             });
         }
 

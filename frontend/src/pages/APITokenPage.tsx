@@ -19,15 +19,8 @@ import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { toast } from 'react-toastify';
-
-interface APIToken {
-    id: string;
-    name: string;
-    token: string;
-    createdAt: string;
-    expiresAt: string | null;
-    lastUsed: string | null;
-}
+import { apiKeyApi } from '../lib/api';
+import type { ApiKey } from '../lib/api';
 
 /**
  * API Token management page
@@ -37,7 +30,7 @@ export function APITokenPage() {
     const navigate = useNavigate();
 
     // State management
-    const [tokens, setTokens] = React.useState<APIToken[]>([]);
+    const [tokens, setTokens] = React.useState<ApiKey[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string>('');
     const [showCreateForm, setShowCreateForm] = React.useState(false);
@@ -53,31 +46,19 @@ export function APITokenPage() {
         loadTokens();
     }, []);
 
+
     const loadTokens = async () => {
         try {
             setLoading(true);
             setError('');
 
-            // TODO: Replace with actual API call
-            // const response = await apiTokenApi.getTokens();
-            // setTokens(response);
-
-            // Mock data for now
-            await new Promise(resolve => setTimeout(resolve, 500));
-            setTokens([
-                {
-                    id: '1',
-                    name: 'Production API',
-                    token: 'sk_live_abc***xyz',
-                    createdAt: new Date().toISOString(),
-                    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                    lastUsed: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-                }
-            ]);
+            const apiKeys = await apiKeyApi.listApiKeys();
+            setTokens(apiKeys);
 
         } catch (error) {
             console.error('Failed to load API tokens:', error);
             setError(error instanceof Error ? error.message : 'Failed to load API tokens');
+            toast.error(error instanceof Error ? error.message : 'Failed to load API tokens');
         } finally {
             setLoading(false);
         }
@@ -91,47 +72,46 @@ export function APITokenPage() {
             // Validate inputs
             if (!tokenName.trim()) {
                 setError('Please enter a token name');
+                toast.error('Please enter a token name');
                 return;
             }
 
-            // TODO: Replace with actual API call
-            // const response = await apiTokenApi.createToken({
-            //     name: tokenName,
-            //     expiryDays: expiryDays || null
-            // });
+            const response = await apiKeyApi.createApiKey(
+                tokenName.trim(),
+                expiryDays ? Number(expiryDays) : null
+            );
 
-            // Mock token creation
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const mockToken = `sk_live_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-            setNewToken(mockToken);
+            // Store the full plain-text API key to display
+            setNewToken(response.apiKey);
 
-            // Add to tokens list
-            const newTokenData: APIToken = {
-                id: String(Date.now()),
-                name: tokenName,
-                token: `${mockToken.substring(0, 12)}***${mockToken.substring(mockToken.length - 3)}`,
-                createdAt: new Date().toISOString(),
-                expiresAt: expiryDays ? new Date(Date.now() + Number(expiryDays) * 24 * 60 * 60 * 1000).toISOString() : null,
-                lastUsed: null
+            // Add masked version to tokens list
+            const newTokenData: ApiKey = {
+                id: response.keyData.id,
+                name: response.keyData.name,
+                key_masked: `${response.keyData.key_prefix}***xyz`,
+                created_at: response.keyData.created_at,
+                expires_at: response.keyData.expires_at,
+                last_used: null,
+                is_revoked: false
             };
 
             setTokens(prev => [newTokenData, ...prev]);
-            toast.success('API token created successfully!');
+            toast.success('API key created successfully!');
 
-            // Reset form
+            // Reset form fields but keep newToken to show warning
             setTokenName('');
             setExpiryDays('');
 
         } catch (error) {
             console.error('Failed to create API token:', error);
             setError(error instanceof Error ? error.message : 'Failed to create API token');
-            toast.error('Failed to create API token');
+            toast.error(error instanceof Error ? error.message : 'Failed to create API token');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRevokeToken = async (tokenId: string) => {
+    const handleRevokeToken = async (tokenId: number) => {
         try {
             if (!confirm('Are you sure you want to revoke this token? This action cannot be undone.')) {
                 return;
@@ -140,29 +120,25 @@ export function APITokenPage() {
             setLoading(true);
             setError('');
 
-            // TODO: Replace with actual API call
-            // await apiTokenApi.revokeToken(tokenId);
-
-            // Mock revocation
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await apiKeyApi.revokeApiKey(tokenId);
 
             // Remove from list
             setTokens(prev => prev.filter(t => t.id !== tokenId));
-            toast.success('API token revoked successfully');
+            toast.success('API key revoked successfully');
 
         } catch (error) {
             console.error('Failed to revoke API token:', error);
             setError(error instanceof Error ? error.message : 'Failed to revoke API token');
-            toast.error('Failed to revoke API token');
+            toast.error(error instanceof Error ? error.message : 'Failed to revoke API token');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCopyToken = (token: string, tokenId: string) => {
+    const handleCopyToken = (token: string, tokenId: number | string) => {
         try {
             navigator.clipboard.writeText(token);
-            setCopiedTokenId(tokenId);
+            setCopiedTokenId(String(tokenId));
             toast.success('Token copied to clipboard');
 
             // Reset copied state after 2 seconds
@@ -431,24 +407,24 @@ export function APITokenPage() {
                                                         <h3 className="text-base font-semibold text-gray-900">
                                                             {token.name}
                                                         </h3>
-                                                        {token.expiresAt && (
+                                                        {token.expires_at && (
                                                             <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                                                                Expires {formatDate(token.expiresAt)}
+                                                                Expires {formatDate(token.expires_at)}
                                                             </span>
                                                         )}
                                                     </div>
 
                                                     <div className="flex items-center space-x-2 mb-3">
                                                         <code className="px-3 py-1.5 bg-gray-100 rounded text-sm font-mono text-gray-700">
-                                                            {token.token}
+                                                            {token.key_masked}
                                                         </code>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => handleCopyToken(token.token, token.id)}
+                                                            onClick={() => handleCopyToken(token.key_masked, token.id)}
                                                             className="cursor-pointer"
                                                         >
-                                                            {copiedTokenId === token.id ? (
+                                                            {copiedTokenId === String(token.id) ? (
                                                                 <CheckCircle className="h-4 w-4 text-green-600" />
                                                             ) : (
                                                                 <Copy className="h-4 w-4" />
@@ -457,9 +433,9 @@ export function APITokenPage() {
                                                     </div>
 
                                                     <div className="flex items-center space-x-4 text-xs text-gray-500">
-                                                        <span>Created {formatDate(token.createdAt)}</span>
+                                                        <span>Created {formatDate(token.created_at)}</span>
                                                         <span>•</span>
-                                                        <span>Last used {formatRelativeTime(token.lastUsed)}</span>
+                                                        <span>Last used {formatRelativeTime(token.last_used)}</span>
                                                     </div>
                                                 </div>
 

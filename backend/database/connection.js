@@ -246,7 +246,7 @@ function createTables(db) {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                key_hash TEXT NOT NULL,
+                key_hash TEXT NOT NULL UNIQUE,
                 key_prefix TEXT NOT NULL,
                 expires_at DATETIME,
                 is_revoked BOOLEAN DEFAULT 0,

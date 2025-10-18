@@ -191,6 +191,30 @@ export const resetPasswordWithOtpSchema = z
 
 export type ResetPasswordWithOtpFormData = z.infer<typeof resetPasswordWithOtpSchema>;
 
+
+// API Key Management Validation Schemas
+
+/**
+ * Create API key form validation schema
+ */
+export const createApiKeySchema = z.object({
+    name: z
+        .string()
+        .min(1, 'API key name is required')
+        .max(100, 'Name must be less than 100 characters')
+        .trim(),
+    expiryDays: z
+        .number()
+        .int('Expiry days must be a whole number')
+        .min(1, 'Expiry must be at least 1 day')
+        .max(365, 'Expiry cannot exceed 365 days')
+        .optional()
+        .nullable(),
+});
+
+export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;
+
+
 /**
  * Utility function to extract user-friendly error message from Zod error
  * @param error - Zod validation error

@@ -47,10 +47,10 @@ async function handleCreateApiKey(req, res) {
 
         // Validate expiryDays if provided
         if (expiryDays !== undefined && expiryDays !== null) {
-            if (typeof expiryDays !== 'number' || expiryDays < 1 || expiryDays > 365) {
+            if (typeof expiryDays !== 'number' || !Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 365) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Invalid input. Expiry days must be between 1 and 365.'
+                    message: 'Invalid input. Expiry days must be a whole number between 1 and 365.'
                 });
             }
         }
@@ -71,21 +71,7 @@ async function handleCreateApiKey(req, res) {
             });
         }
 
-        // Check active API key count
-        const activeKeyCount = /** @type {{count: number}} */ (db.prepare(`
-            SELECT COUNT(*) as count
-            FROM api_keys
-            WHERE user_id = ? AND is_revoked = 0
-        `).get(userId));
-
-        if (activeKeyCount.count >= user.api_key_limit) {
-            return res.status(403).json({
-                success: false,
-                message: `You have reached the maximum limit of ${user.api_key_limit} API keys. Please revoke an existing key before creating a new one.`
-            });
-        }
-
-        // Generate API key
+        // Generate API key before transaction
         const apiKey = generateApiKey();
         const keyHash = await hashApiKey(apiKey);
         const keyPrefix = extractKeyPrefix(apiKey);
@@ -98,22 +84,50 @@ async function handleCreateApiKey(req, res) {
             expiresAt = expiryDate.toISOString();
         }
 
-        // Insert API key into database
-        const insertKey = db.prepare(`
-            INSERT INTO api_keys (user_id, name, key_hash, key_prefix, expires_at)
-            VALUES (?, ?, ?, ?, ?)
-        `);
+        // Use transaction to prevent race condition
+        let keyId;
+        try {
+            db.prepare('BEGIN TRANSACTION').run();
 
-        const result = insertKey.run(
-            userId,
-            name.trim(),
-            keyHash,
-            keyPrefix,
-            expiresAt
-        );
+            // Check active API key count within transaction
+            const activeKeyCount = /** @type {{count: number}} */ (db.prepare(`
+                SELECT COUNT(*) as count
+                FROM api_keys
+                WHERE user_id = ? AND is_revoked = 0
+            `).get(userId));
+
+            if (activeKeyCount.count >= user.api_key_limit) {
+                db.prepare('ROLLBACK').run();
+                return res.status(403).json({
+                    success: false,
+                    message: `You have reached the maximum limit of ${user.api_key_limit} API keys. Please revoke an existing key before creating a new one.`
+                });
+            }
+
+            // Insert API key into database
+            const insertKey = db.prepare(`
+                INSERT INTO api_keys (user_id, name, key_hash, key_prefix, expires_at)
+                VALUES (?, ?, ?, ?, ?)
+            `);
+
+            const result = insertKey.run(
+                userId,
+                name.trim(),
+                keyHash,
+                keyPrefix,
+                expiresAt
+            );
+
+            keyId = result.lastInsertRowid;
+
+            db.prepare('COMMIT').run();
+
+        } catch (transactionError) {
+            db.prepare('ROLLBACK').run();
+            throw transactionError;
+        }
 
         // Get the created API key details
-        const keyId = result.lastInsertRowid;
         const createdKey = /** @type {{
             id: number,
             name: string,
