@@ -2,6 +2,7 @@ const winston = require('winston');
 const { loggerTypes } = require('../logging/logger');
 const sqlAsync = require('../../database/sqlAsync');
 const promiseAwait = require('../utils/promiseAwait');
+const startupCoordination = require('../recovery/startupCoordination');
 
 /**
  * Class will handle anti greylisting for provided emails
@@ -53,6 +54,11 @@ class AntiGreylisting {
 				max_retries_reached NUMBER NOT NULL,
 				returned NUMBER NOT NULL
 			)`);
+
+			// WAIT for recovery to complete before syncing
+			this.logger.info('Waiting for startup recovery to complete...');
+			await startupCoordination.waitForRecovery();
+			this.logger.info('Recovery complete - proceeding with antiGreylisting sync');
 
 			// sync the database
 			await this.syncDB();

@@ -22,6 +22,7 @@ const loggerTypes = {
 	smtp3: 'smtp3',
 	antiGreylist: 'antiGreylist',
 	msLogin: 'msLogin',
+	startupRecovery: 'startupRecovery',
 };
 
 // The default system logger
@@ -179,6 +180,23 @@ winston.loggers.add(loggerTypes.msLogin, {
 		new winston.transports.File({ filename: `.logs/${loggerTypes.msLogin}.log`, level: 'debug' }),
 	],
 	defaultMeta: { service: loggerTypes.msLogin },
+});
+
+// Startup Recovery Logger
+winston.loggers.add(loggerTypes.startupRecovery, {
+	level: 'debug',
+	format: combine(
+		errors({ stack: true }),
+		timestamp(),
+		json()
+		// prettyPrint() // uncomment if you want beautiful logs
+	),
+	transports: [
+		new winston.transports.Console(),
+		new winston.transports.File({ filename: `.logs/all.log`, level: 'error' }),
+		new winston.transports.File({ filename: `.logs/${loggerTypes.startupRecovery}.log`, level: 'debug' }),
+	],
+	defaultMeta: { service: loggerTypes.startupRecovery },
 });
 
 module.exports.loggerTypes = loggerTypes;

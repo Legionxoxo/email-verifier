@@ -145,6 +145,9 @@ const corsConfig = cors({
 	},
 	credentials: true,
 	optionsSuccessStatus: 200,
+	allowedHeaders: ['Content-Type', 'Authorization'],
+	exposedHeaders: ['Content-Type'],
+	methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
 });
 
 // Validation rules

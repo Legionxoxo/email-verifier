@@ -5,6 +5,7 @@ const sqldb = require('../../database/connect_sql');
 const sqlAsync = require('../../database/sqlAsync');
 const promiseAwait = require('../utils/promiseAwait');
 const { loggerTypes } = require('../logging/logger');
+const startupCoordination = require('../recovery/startupCoordination');
 
 /**
  * This Queue takes the emails and creates
@@ -223,6 +224,11 @@ class Queue {
                 emails TEXT,
                 response_url TEXT
                 )`);
+
+			// WAIT for recovery to complete before syncing
+			this.logger.info('Waiting for startup recovery to complete...');
+			await startupCoordination.waitForRecovery();
+			this.logger.info('Recovery complete - proceeding with queue sync');
 
 			// Get the queue variables synced up
 			await this.sync_pull();

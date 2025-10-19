@@ -9,6 +9,8 @@ const sqlAsync = require('../../database/sqlAsync');
 const antiGreylisting = require('./antiGreylisting');
 const { axiosPost } = require('../utils/axios');
 const { updateVerificationResults } = require('../route_fns/verify/verificationDB');
+const StartupRecovery = require('../recovery/startupRecovery');
+const startupCoordination = require('../recovery/startupCoordination');
 
 /**
  * @typedef {Object} RequestObj
@@ -52,7 +54,7 @@ class Controller {
 	workers_last_ping;
 	/** @private @type {(RequestObj | null)[]} - request assignments to workers */
 	request_assignments;
-	/** @private @type {Map<string, RequestObj & {result: Map<string, VerificationObj>, created_at: number}>} request archive */
+	/** @public @type {Map<string, RequestObj & {result: Map<string, VerificationObj>, created_at: number}>} request archive - public for recovery module access */
 	request_archive = new Map();
 
 	/** @private @type {number} - Number of threads to create */
@@ -119,10 +121,57 @@ class Controller {
 				results TEXT,
 				total_emails INTEGER DEFAULT 0,
 				completed_emails INTEGER DEFAULT 0,
+				webhook_sent BOOLEAN DEFAULT 0,
+				webhook_attempts INTEGER DEFAULT 0,
 				created_at NUMBER NOT NULL,
 				updated_at NUMBER NOT NULL,
 				completed_at NUMBER
                 )`);
+
+			// restore archive from database to memory
+			await this.syncArchive();
+
+			// run startup recovery to detect and recover orphaned requests
+			let recoverySucceeded = false;
+			try {
+				this.logger.info('========================================');
+				this.logger.info('    STARTUP RECOVERY INITIATED');
+				this.logger.info('========================================');
+
+				const recovery = new StartupRecovery();
+				const recoveryStats = await recovery.runRecovery(this, antiGreylisting);
+
+				this.logger.info('========================================');
+				this.logger.info('    RECOVERY COMPLETED SUCCESSFULLY ✓');
+				this.logger.info('========================================');
+				this.logger.info(`Archives Restored: ${recoveryStats.archivesRestored}`);
+				this.logger.info(`Orphans Found: ${recoveryStats.orphansFound}`);
+				this.logger.info(`  - Completed: ${recoveryStats.orphansCompleted}`);
+				this.logger.info(`  - Re-queued: ${recoveryStats.orphansRequeued}`);
+				this.logger.info(`  - Waiting Greylist: ${recoveryStats.orphansWaitingGreylist}`);
+				this.logger.info(`  - Failed: ${recoveryStats.orphansFailed}`);
+				this.logger.info(`Errors: ${recoveryStats.errorsEncountered}`);
+				if (recoveryStats.recoveredRequestIds.length > 0) {
+					this.logger.info(`Recovered IDs: ${recoveryStats.recoveredRequestIds.join(', ')}`);
+				}
+				this.logger.info('========================================');
+
+				recoverySucceeded = true;
+			} catch (recoveryError) {
+				this.logger.error('========================================');
+				this.logger.error('    RECOVERY FAILED ✗');
+				this.logger.error('========================================');
+				this.logger.error(`Error: ${recoveryError?.toString()}`);
+				this.logger.error(`Stack: ${recoveryError?.stack}`);
+				this.logger.error('========================================');
+				this.logger.warn('System will continue startup with degraded state');
+				this.logger.warn('Some orphaned requests may not be recovered');
+				// Decision: Continue startup with degraded state (recovery failed but system can operate)
+			} finally {
+				// CRITICAL: Always signal complete, even on error, to prevent deadlock
+				startupCoordination.markRecoveryComplete();
+				this.logger.info(`Recovery phase complete [${recoverySucceeded ? 'SUCCESS' : 'FAILED'}] - releasing queue/antiGreylisting`);
+			}
 
 			// create the verifier worker instances
 			for (let i = 0; i < this.threads_num; i++) {
@@ -149,8 +198,8 @@ class Controller {
 			// start checking
 			this.checkQueue();
 
-			// Purge archive rec
-			// this.purgeArchiveRec();
+			// start periodic archive cleanup (runs every hour)
+			this.purgeArchiveRec();
 		} catch (error) {
 			this.logger.error(`init() error -> ${error?.toString()}`);
 		}
@@ -466,7 +515,7 @@ class Controller {
 				let finalResult = result;
 				if (requestFromArch) {
 					const archivedResult = requestFromArch.result;
-					finalResult = new Map([...result, ...archivedResult]); // archived results will overlap the entries from result
+					finalResult = new Map([...archivedResult, ...result]); // new results will overlap archived entries
 				}
 
 				const resultArr = Array.from(finalResult.values()),
@@ -500,6 +549,15 @@ class Controller {
 				} else {
 					this.logger.debug(`No response_url provided for request ${request_id}, results stored in database`);
 				}
+
+				// cleanup archive after completion (immediate memory cleanup)
+				if (this.request_archive.has(request_id)) {
+					this.request_archive.delete(request_id);
+					this.logger.debug(`Deleted archive from memory for completed request ${request_id}`);
+				}
+
+				// cleanup archive from database (will be handled by tiered cleanup job)
+				// Note: Not deleting immediately to allow webhook retry verification window
 			}
 
 			// }
@@ -589,7 +647,7 @@ class Controller {
 	/**
 	 * Update request status and details in local SQLite database (replaces PostgreSQL operations)
 	 * @param {string} request_id
-	 * @param {Partial<{status: string, verifying: boolean, greylist_found: boolean, greylist_found_at: string, blacklist_found: boolean, blacklist_found_at: string, results: string, total_emails: number, completed_emails: number, completed_at: number}>} updates
+	 * @param {Partial<{status: string, verifying: boolean, greylist_found: boolean, greylist_found_at: string, blacklist_found: boolean, blacklist_found_at: string, results: string, total_emails: number, completed_emails: number, webhook_sent: boolean, webhook_attempts: number, completed_at: number}>} updates
 	 * @returns {Promise<boolean>}
 	 */
 	async updateResultsDB(request_id, updates) {
@@ -621,7 +679,7 @@ class Controller {
 	/**
 	 * Get request status and details from local database
 	 * @param {string} request_id
-	 * @returns {Promise<{request_id: string, status: string, verifying: boolean, greylist_found: boolean, blacklist_found: boolean, results: any, total_emails: number, completed_emails: number, created_at: number, updated_at: number, completed_at: number | null} | null>}
+	 * @returns {Promise<{request_id: string, status: string, verifying: boolean, greylist_found: boolean, blacklist_found: boolean, results: any, total_emails: number, completed_emails: number, webhook_sent: boolean, webhook_attempts: number, created_at: number, updated_at: number, completed_at: number | null} | null>}
 	 */
 	async getRequestStatus(request_id) {
 		/** @type {any} */
@@ -642,6 +700,8 @@ class Controller {
 					results: dbRes.results ? JSON.parse(dbRes.results) : null,
 					total_emails: dbRes.total_emails || 0,
 					completed_emails: dbRes.completed_emails || 0,
+					webhook_sent: !!dbRes.webhook_sent,
+					webhook_attempts: dbRes.webhook_attempts || 0,
 					created_at: dbRes.created_at,
 					updated_at: dbRes.updated_at,
 					completed_at: dbRes.completed_at || null,
@@ -722,11 +782,23 @@ class Controller {
 	async sendResultsCallback(request_id, response_url, results, totalEmails, maxRetries = 5) {
 		if (!response_url) {
 			this.logger.debug(`No response_url provided for request ${request_id}, skipping callback`);
+
+			// mark as sent since no webhook was required
+			await this.updateResultsDB(request_id, {
+				webhook_sent: true,
+				webhook_attempts: 0,
+			});
+
 			return true;
 		}
 
+		let webhookSent = false;
+		let attemptCount = 0;
+
 		try {
 			for (let attempt = 1; attempt <= maxRetries; attempt++) {
+				attemptCount = attempt;
+
 				try {
 					this.logger.debug(`Sending callback for ${request_id} (attempt ${attempt}/${maxRetries})`);
 
@@ -741,7 +813,8 @@ class Controller {
 
 					if (response.success && response.status === 200) {
 						this.logger.info(`Callback successful for request ${request_id}`);
-						return true;
+						webhookSent = true;
+						break;
 					}
 
 					this.logger.warn(`Callback attempt ${attempt} failed for ${request_id}: status ${response.status}`);
@@ -758,10 +831,26 @@ class Controller {
 				}
 			}
 
-			this.logger.error(`All callback attempts failed for request ${request_id}`);
-			return false;
+			// update database with webhook delivery status
+			await this.updateResultsDB(request_id, {
+				webhook_sent: webhookSent,
+				webhook_attempts: attemptCount,
+			});
+
+			if (!webhookSent) {
+				this.logger.error(`All callback attempts failed for request ${request_id}`);
+			}
+
+			return webhookSent;
 		} catch (error) {
 			this.logger.error(`sendResultsCallback() error -> ${error?.toString()}`);
+
+			// track failed webhook attempt in database
+			await this.updateResultsDB(request_id, {
+				webhook_sent: false,
+				webhook_attempts: attemptCount,
+			});
+
 			return false;
 		}
 	}
@@ -965,65 +1054,110 @@ class Controller {
 	}
 
 	/**
-	 * Sync to the request archive database
-	 * @param {string} request_id
+	 * Restore archive entries from database to memory on startup
+	 * This ensures partial results are not lost during crash recovery
 	 */
-	// async syncArchive(request_id) {
-	// 	try {
-	// 		// purge old entries
-	// 		this.purgeArchive();
+	async syncArchive() {
+		let restoredCount = 0;
+		let errorCount = 0;
 
-	// 		/** @type {any} */
-	// 		const archiveRes = await sqlAsync.allAsync(`SELECT * FROM ${this.controllerID}Archive`);
+		try {
+			/** @type {any} */
+			const archiveRes = await sqlAsync.allAsync(`SELECT * FROM ${this.controllerID}Archive`);
 
-	// 		for (const arch of archiveRes) {
-	// 			const request_id = arch?.request_id || '',
-	// 				emails = JSON.parse(arch?.emails || '[]'),
-	// 				response_url = arch?.response_url || '',
-	// 				result = new Map(JSON.parse(arch?.result || '[]')),
-	// 				created_at = parseInt(arch?.created_at || '');
+			this.logger.info(`Restoring ${archiveRes.length} archive entries from database...`);
 
-	// 			this.request_archive.set(request_id, {
-	// 				request_id,
-	// 				emails,
-	// 				response_url,
-	// 				result,
-	// 				created_at,
-	// 			});
-	// 		}
-	// 	} catch (error) {
-	// 		this.logger.error(`syncArchive() error -> `, error);
-	// 	}
-	// }
+			for (const arch of archiveRes) {
+				try {
+					const request_id = arch?.request_id || '';
+
+					if (!request_id) {
+						this.logger.warn(`Skipping archive entry with missing request_id`);
+						errorCount++;
+						continue;
+					}
+
+					const emails = JSON.parse(arch?.emails || '[]');
+					const response_url = arch?.response_url || '';
+					const result = new Map(JSON.parse(arch?.result || '[]'));
+					const created_at = parseInt(arch?.created_at || '0');
+
+					this.request_archive.set(request_id, {
+						request_id,
+						emails,
+						response_url,
+						result,
+						created_at,
+					});
+
+					restoredCount++;
+				} catch (parseError) {
+					this.logger.error(`Failed to parse archive entry: ${parseError?.toString()}`);
+					errorCount++;
+				}
+			}
+
+			this.logger.info(`Archive restoration complete: ${restoredCount} restored, ${errorCount} errors`);
+		} catch (error) {
+			this.logger.error(`syncArchive() error -> ${error?.toString()}`);
+		}
+	}
 
 	/**
-	 * Purge unnecessary archive entries
+	 * Tiered cleanup for controller0Archive table
+	 * Tier 1: Completed requests → clean after 24 hours
+	 * Tier 2: Orphans/Processing → clean after 7 days
 	 */
-	// async purgeArchive() {
-	// 	try {
-	// 		const now = new Date().getTime(),
-	// 			deadline = now - 1000 * 60 * 60 * 24; // delete entries from 1 day ago
+	async purgeArchive() {
+		try {
+			const now = new Date().getTime();
+			const tier1Deadline = now - 1000 * 60 * 60 * 24; // 24 hours
+			const tier2Deadline = now - 1000 * 60 * 60 * 24 * 7; // 7 days
 
-	// 		await sqlAsync.runAsync(`DELETE FROM ${this.controllerID}Archive WHERE created_at < ?`, [deadline]);
-	// 	} catch (error) {
-	// 		this.logger.error(`purgeArchive() error -> `, error);
-	// 	}
-	// }
+			// Tier 1: Delete completed requests older than 24 hours
+			await sqlAsync.runAsync(
+				`DELETE FROM ${this.controllerID}Archive
+				 WHERE request_id IN (
+					SELECT a.request_id
+					FROM ${this.controllerID}Archive a
+					INNER JOIN ${this.controllerID}Results r ON a.request_id = r.request_id
+					WHERE r.status = 'completed'
+					AND r.completed_at IS NOT NULL
+					AND r.completed_at < ?
+				 )`,
+				[tier1Deadline]
+			);
+
+			// Tier 2: Delete orphans/processing requests older than 7 days
+			await sqlAsync.runAsync(
+				`DELETE FROM ${this.controllerID}Archive
+				 WHERE created_at < ?
+				 AND request_id NOT IN (
+					SELECT request_id FROM ${this.controllerID}Results WHERE status = 'completed'
+				 )`,
+				[tier2Deadline]
+			);
+
+			this.logger.debug(`Archive cleanup completed: tier1 (24h+), tier2 (7d+)`);
+		} catch (error) {
+			this.logger.error(`purgeArchive() error -> ${error?.toString()}`);
+		}
+	}
 
 	/**
-	 * Continuous purging trigger
+	 * Continuous archive cleanup (runs every hour)
 	 */
-	// async purgeArchiveRec() {
-	// 	try {
-	// 		await this.purgeArchive();
-	// 	} catch (error) {
-	// 		this.logger.error(`purgeArchiveRec() error -> `, error);
-	// 	} finally {
-	// 		await promiseAwait(10); // run every 10 seconds
+	async purgeArchiveRec() {
+		try {
+			await this.purgeArchive();
+		} catch (error) {
+			this.logger.error(`purgeArchiveRec() error -> ${error?.toString()}`);
+		} finally {
+			await promiseAwait(60 * 60); // run every 1 hour
 
-	// 		this.purgeArchiveRec();
-	// 	}
-	// }
+			this.purgeArchiveRec();
+		}
+	}
 
 	/**
 	 * This process will handle ping from the worker & will update the workers_last_ping time
