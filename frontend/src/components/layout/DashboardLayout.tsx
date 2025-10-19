@@ -55,8 +55,8 @@ export function DashboardLayout({
                             {/* Logo and title */}
                             <div className="flex items-center space-x-3">
                                 <Link to="/dashboard" className="flex items-center space-x-3 cursor-pointer">
-                                    <div className="h-8 w-8 bg-gray-900 rounded flex items-center justify-center">
-                                        <span className="text-white font-bold text-sm">M</span>
+                                    <div className="h-8 w-8 bg-[#0285FF] rounded flex items-center justify-center">
+                                        <span className="text-white font-bold text-sm">B</span>
                                     </div>
                                     <div className="hidden sm:block">
                                         <h1 className="text-lg font-semibold text-gray-900">
