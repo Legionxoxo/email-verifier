@@ -406,6 +406,32 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                                     Try Again
                                 </button>
                             </div>
+                        ) : isProcessing && selectedFile ? (
+                            /* Enhanced Loading State */
+                            <div className="space-y-4 px-4">
+                                {/* Animated Spinner */}
+                                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto" />
+
+                                {/* Loading Text */}
+                                <div className="space-y-2">
+                                    <p className="text-sm font-semibold text-blue-600">
+                                        Uploading File...
+                                    </p>
+                                    <p className="text-xs text-gray-700 font-medium break-all">
+                                        {selectedFile.name}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                    </p>
+                                </div>
+
+                                {/* Progress Indicator */}
+                                <div className="w-full max-w-[200px] mx-auto">
+                                    <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 animate-[shimmer_1.5s_infinite] w-full" />
+                                    </div>
+                                </div>
+                            </div>
                         ) : (
                             <>
                                 {/* Download Icon */}
@@ -417,7 +443,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                                 {/* Import Text */}
                                 <div className="space-y-1">
                                     <h3 className="text-lg font-semibold text-gray-600">
-                                        {isProcessing ? 'Processing...' : 'Import'}
+                                        Import
                                     </h3>
                                     <p className="text-gray-500 text-xs">
                                         {isDragging ? 'Drop CSV here' : 'Select CSV file'}

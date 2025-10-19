@@ -95,8 +95,15 @@ function sanitizeHeader(header) {
  */
 function validateParseResults(results, rowIndex) {
 	if (results.errors && results.errors.length > 0) {
-		const error = results.errors[0];
-		throw new Error(`CSV parsing error at row ${rowIndex}: ${error.message || 'Unknown error'}`);
+		// Filter out non-fatal warnings (e.g., UndetectableDelimiter for single-column CSVs)
+		const fatalErrors = results.errors.filter(error =>
+			error.code !== 'UndetectableDelimiter'
+		);
+
+		if (fatalErrors.length > 0) {
+			const error = fatalErrors[0];
+			throw new Error(`CSV parsing error at row ${rowIndex}: ${error.message || 'Unknown error'}`);
+		}
 	}
 
 	if (results.meta && results.meta.aborted) {

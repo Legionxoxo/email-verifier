@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
+import { TableSkeleton } from '../components/ui/Skeleton';
 import { toast } from 'react-toastify';
 import { verificationApi, type VerificationHistoryItem } from '../lib/api';
 
@@ -46,6 +47,7 @@ export function HistoryPage() {
     const [currentPage, setCurrentPage] = React.useState(1);
     const [hasMore, setHasMore] = React.useState(true);
     const [total, setTotal] = React.useState(0);
+    const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
 
     const loadExports = React.useCallback(async (page: number, isReset: boolean) => {
         try {
@@ -123,6 +125,9 @@ export function HistoryPage() {
         let linkElement: HTMLAnchorElement | null = null;
 
         try {
+            // Set loading state immediately to prevent multiple clicks
+            setDownloadingId(verificationRequestId);
+
             const exp = exports.find(e => e.verification_request_id === verificationRequestId);
             if (!exp || exp.request_type !== 'csv') {
                 toast.error('Only CSV verifications can be downloaded');
@@ -165,6 +170,8 @@ export function HistoryPage() {
             if (linkElement && document.body.contains(linkElement)) {
                 document.body.removeChild(linkElement);
             }
+            // Reset loading state
+            setDownloadingId(null);
         }
     };
 
@@ -264,7 +271,7 @@ export function HistoryPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header with Back Button */}
                 <div className="mb-8">
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-col items-start space-y-4 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
                         <Button
                             variant="ghost"
                             size="sm"
@@ -361,9 +368,28 @@ export function HistoryPage() {
                     <Card padding="none">
                         <CardContent className="p-0">
                             {loading ? (
-                                <div className="text-center py-12">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4" />
-                                    <p className="text-gray-600">Loading verification history...</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-700">
+                                                    Export Name
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-700">
+                                                    Dated
+                                                </th>
+                                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-700">
+                                                    Status
+                                                </th>
+                                                <th className="px-6 py-4 text-right text-sm font-medium text-gray-700">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                        </tbody>
+                                    </table>
+                                    <TableSkeleton rows={5} columns={4} />
                                 </div>
                             ) : exports.length === 0 ? (
                                 <div className="text-center py-12">
@@ -444,7 +470,8 @@ export function HistoryPage() {
                                                                         e.stopPropagation();
                                                                         handleDownload(exp.verification_request_id);
                                                                     }}
-                                                                    disabled={exp.status !== 'completed'}
+                                                                    disabled={exp.status !== 'completed' || downloadingId === exp.verification_request_id}
+                                                                    loading={downloadingId === exp.verification_request_id}
                                                                     className="cursor-pointer text-[#4169E1] hover:bg-blue-50"
                                                                     title="Download"
                                                                 >

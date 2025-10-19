@@ -247,12 +247,12 @@ export function SettingsPage() {
                 case 'change-email':
                     return (
                         <div className="space-y-6">
-                            <div className="flex items-center space-x-4">
+                            <div className="flex flex-col items-start space-y-4 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleSecurityViewChange('overview')}
-                                    className="flex items-center space-x-1"
+                                    className="flex items-center space-x-1 cursor-pointer"
                                 >
                                     <ArrowLeft className="h-4 w-4" />
                                     <span>Back</span>
@@ -282,12 +282,12 @@ export function SettingsPage() {
                 case 'forgot-password':
                     return (
                         <div className="space-y-6">
-                            <div className="flex items-center space-x-4">
+                            <div className="flex flex-col items-start space-y-4 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleSecurityViewChange('overview')}
-                                    className="flex items-center space-x-1"
+                                    className="flex items-center space-x-1 cursor-pointer"
                                 >
                                     <ArrowLeft className="h-4 w-4" />
                                     <span>Back</span>
@@ -406,8 +406,8 @@ export function SettingsPage() {
                     {/* Header */}
                     <div className="mb-8">
                         {/* Desktop layout: side by side (default) */}
-                        <div className="hidden sm:flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
+                        <div className="hidden sm:flex flex-col items-start space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
+                            <div className="flex flex-col items-start space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -450,18 +450,18 @@ export function SettingsPage() {
 
                         {/* Mobile layout: stacked */}
                         <div className="sm:hidden space-y-4">
-                            {/* Top row: Title and Back button */}
-                            <div className="flex items-start space-x-3">
+                            {/* Top row: Title and Back button - stacked vertically */}
+                            <div className="flex flex-col items-start space-y-4">
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={handleBackNavigation}
-                                    className="flex items-center space-x-1 min-h-[44px] cursor-pointer flex-shrink-0 mt-1"
+                                    className="flex items-center space-x-1 cursor-pointer"
                                 >
                                     <ArrowLeft className="h-4 w-4" />
                                     <span>Back</span>
                                 </Button>
-                                <div className="flex-1 min-w-0">
+                                <div>
                                     <h1 className="text-lg font-bold text-gray-900 leading-tight">Settings</h1>
                                     <p className="text-sm text-gray-600 mt-2 leading-relaxed">
                                         Manage your account preferences and security settings

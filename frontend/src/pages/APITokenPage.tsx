@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { CardSkeleton } from '../components/ui/Skeleton';
 import { Input } from '../components/ui/Input';
 import { toast } from 'react-toastify';
 import { apiKeyApi } from '../lib/api';
@@ -80,10 +81,11 @@ export function APITokenPage() {
     };
 
     const handleCreateToken = async () => {
-        try {
-            setLoading(true);
-            setError('');
+        // Set loading state immediately to prevent multiple clicks
+        setLoading(true);
+        setError('');
 
+        try {
             // Validate inputs
             if (!tokenName.trim()) {
                 setError('Please enter a token name');
@@ -223,8 +225,8 @@ export function APITokenPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header with Back Button */}
                 <div className="mb-8">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
+                    <div className="flex flex-col items-start space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                        <div className="flex flex-col items-start space-y-4 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -404,10 +406,7 @@ export function APITokenPage() {
                         </CardHeader>
                         <CardContent>
                             {loading && tokens.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4" />
-                                    <p className="text-gray-600">Loading tokens...</p>
-                                </div>
+                                <CardSkeleton rows={3} />
                             ) : tokens.length === 0 ? (
                                 <div className="text-center py-12">
                                     <Key className="h-16 w-16 text-gray-300 mx-auto mb-4" />

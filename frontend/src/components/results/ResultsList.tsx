@@ -3,10 +3,12 @@
  * Displays list of verified emails with their status
  */
 
+import { useState } from 'react';
 import { CheckCircle2, XCircle, AlertCircle, HelpCircle, List } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import type { EmailVerificationResult } from '../../pages/VerificationResultsPage';
+import { toast } from 'react-toastify';
 
 
 // Interface for component props
@@ -59,52 +61,67 @@ function getStatusIcon(status: string) {
 
 
 /**
- * Download results as CSV from backend
- * Backend generates enriched CSV with original data + verification results
- */
-async function downloadCSV(
-    csvUploadId: string | undefined,
-    listName: string | null | undefined,
-    originalFilename: string | undefined
-) {
-    try {
-        if (!csvUploadId) {
-            console.error('No CSV upload ID available for download');
-            return;
-        }
-
-        // Use backend API to download enriched CSV
-        const { verificationApi } = await import('../../lib/api');
-        const blob = await verificationApi.downloadCSVResults(csvUploadId);
-
-        // Determine filename - prefer list_name, fallback to original_filename
-        const downloadFilename = listName
-            ? `${listName}.csv`
-            : (originalFilename || `results_${csvUploadId}.csv`);
-
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', downloadFilename);
-        link.style.visibility = 'hidden';
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        URL.revokeObjectURL(url);
-
-    } catch (error) {
-        console.error('CSV download error:', error);
-    }
-}
-
-
-/**
  * Results List Component
  */
 export function ResultsList({ results, totalCount, csvUploadId, listName, originalFilename }: ResultsListProps) {
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    /**
+     * Download results as CSV from backend
+     * Backend generates enriched CSV with original data + verification results
+     */
+    const handleDownloadCSV = async () => {
+        let url: string | null = null;
+        let linkElement: HTMLAnchorElement | null = null;
+
+        try {
+            // Set loading state immediately to prevent multiple clicks
+            setIsDownloading(true);
+
+            if (!csvUploadId) {
+                toast.error('No CSV upload ID available for download');
+                return;
+            }
+
+            toast.info('Downloading results...');
+
+            // Use backend API to download enriched CSV
+            const { verificationApi } = await import('../../lib/api');
+            const blob = await verificationApi.downloadCSVResults(csvUploadId);
+
+            // Determine filename - prefer list_name, fallback to original_filename
+            const downloadFilename = listName
+                ? `${listName}.csv`
+                : (originalFilename || `results_${csvUploadId}.csv`);
+
+            // Create download link
+            url = URL.createObjectURL(blob);
+            linkElement = document.createElement('a');
+            linkElement.href = url;
+            linkElement.download = downloadFilename;
+            linkElement.style.visibility = 'hidden';
+
+            document.body.appendChild(linkElement);
+            linkElement.click();
+
+            toast.success('Download started successfully');
+
+        } catch (error) {
+            console.error('CSV download error:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to download CSV');
+        } finally {
+            // Clean up resources
+            if (url) {
+                URL.revokeObjectURL(url);
+            }
+            if (linkElement && document.body.contains(linkElement)) {
+                document.body.removeChild(linkElement);
+            }
+            // Reset loading state
+            setIsDownloading(false);
+        }
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -116,7 +133,9 @@ export function ResultsList({ results, totalCount, csvUploadId, listName, origin
                     <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => downloadCSV(csvUploadId, listName, originalFilename)}
+                        onClick={handleDownloadCSV}
+                        disabled={isDownloading}
+                        loading={isDownloading}
                         className="cursor-pointer"
                     >
                         Download CSV

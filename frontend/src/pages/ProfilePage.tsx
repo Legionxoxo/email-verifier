@@ -36,32 +36,32 @@ export function ProfilePage() {
 
 
     return (
-            <div className="min-h-screen bg-gray-50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    {/* Header with Back Button */}
-                    <div className="mb-8">
-                        <div className="flex items-center space-x-4">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleBackNavigation}
-                                className="flex items-center space-x-1 cursor-pointer"
-                            >
-                                <ArrowLeft className="h-4 w-4" />
-                                <span>Back</span>
-                            </Button>
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">
-                                    Your Profile
-                                </h1>
-                                <p className="text-gray-600 mt-1">
-                                    Manage your account information and settings.
-                                </p>
-                            </div>
+        <div className="min-h-screen bg-gray-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Header with Back Button */}
+                <div className="mb-8">
+                    <div className="flex flex-col items-start space-y-4 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleBackNavigation}
+                            className="flex items-center space-x-1 cursor-pointer"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            <span>Back</span>
+                        </Button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900">
+                                Your Profile
+                            </h1>
+                            <p className="text-gray-600 mt-1">
+                                Manage your account information and settings.
+                            </p>
                         </div>
                     </div>
+                </div>
 
-                    <div className="space-y-8">
+                <div className="space-y-8">
                     {/* Stats cards */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -162,8 +162,9 @@ export function ProfilePage() {
                                     </Button>
 
                                     <Button
-                                        onClick={() => alert('Profile editing coming soon!')}
+                                        onClick={() => navigate('/settings')}
                                         variant="outline"
+                                        className="cursor-pointer"
                                     >
                                         Edit Profile
                                     </Button>
@@ -206,8 +207,8 @@ export function ProfilePage() {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <Button
                                         variant="outline"
-                                        className="justify-start h-auto p-4"
-                                        onClick={() => alert('Settings coming soon!')}
+                                        className="justify-start h-auto p-4 cursor-pointer"
+                                        onClick={() => navigate('/settings')}
                                     >
                                         <div className="text-left">
                                             <p className="font-medium">Account Settings</p>
@@ -217,8 +218,8 @@ export function ProfilePage() {
 
                                     <Button
                                         variant="outline"
-                                        className="justify-start h-auto p-4"
-                                        onClick={() => alert('Security settings coming soon!')}
+                                        className="justify-start h-auto p-4 cursor-pointer"
+                                        onClick={() => navigate('/settings?tab=security')}
                                     >
                                         <div className="text-left">
                                             <p className="font-medium">Security</p>
@@ -228,8 +229,8 @@ export function ProfilePage() {
 
                                     <Button
                                         variant="outline"
-                                        className="justify-start h-auto p-4"
-                                        onClick={() => alert('Help center coming soon!')}
+                                        className="justify-start h-auto p-4 cursor-pointer"
+                                        onClick={() => navigate('/docs')}
                                     >
                                         <div className="text-left">
                                             <p className="font-medium">Help & Support</p>

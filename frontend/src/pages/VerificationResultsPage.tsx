@@ -11,6 +11,7 @@ import { DashboardLayout } from '../components/layout';
 import { Button } from '../components/ui/Button';
 import { ResultAnalysis } from '../components/results/ResultAnalysis';
 import { ResultsList } from '../components/results/ResultsList';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks';
 import { verificationApi } from '../lib/api';
 import type { User } from '../contexts/AuthContext';
@@ -240,12 +241,73 @@ export function VerificationResultsPage({
                     user={user || undefined}
                     onLogout={handleLogout}
                 >
-                    <div className="flex items-center justify-center min-h-[400px]">
-                        <div className="text-center space-y-4 p-8">
-                            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto" />
-                            <p className="text-lg font-medium text-gray-900">
-                                Loading results...
-                            </p>
+                    <div className="px-4 sm:px-6 lg:px-8 py-8">
+                        {/* Header skeleton */}
+                        <div className="mb-8">
+                            <div className="flex items-center space-x-4">
+                                <Skeleton className="h-8 w-32" />
+                            </div>
+                        </div>
+
+                        {/* Results Grid Skeleton */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left column - Result Analysis Skeleton */}
+                            <div className="space-y-6">
+                                {/* Card 1 - Stats */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                    <Skeleton className="h-6 w-32 mb-4" />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <Skeleton className="h-8 w-20 mb-2" />
+                                            <Skeleton className="h-4 w-16" />
+                                        </div>
+                                        <div>
+                                            <Skeleton className="h-8 w-20 mb-2" />
+                                            <Skeleton className="h-4 w-16" />
+                                        </div>
+                                        <div>
+                                            <Skeleton className="h-8 w-20 mb-2" />
+                                            <Skeleton className="h-4 w-16" />
+                                        </div>
+                                        <div>
+                                            <Skeleton className="h-8 w-20 mb-2" />
+                                            <Skeleton className="h-4 w-16" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Card 2 - Chart */}
+                                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                    <Skeleton className="h-6 w-40 mb-4" />
+                                    <Skeleton className="h-48 w-full" />
+                                </div>
+                            </div>
+
+                            {/* Right column - Results List Skeleton */}
+                            <div>
+                                <div className="bg-white border border-gray-200 rounded-lg">
+                                    {/* Header */}
+                                    <div className="p-6 border-b border-gray-200">
+                                        <div className="flex items-center justify-between">
+                                            <Skeleton className="h-6 w-48" />
+                                            <Skeleton className="h-9 w-32" />
+                                        </div>
+                                    </div>
+
+                                    {/* List items */}
+                                    <div className="p-6 space-y-3">
+                                        {Array.from({ length: 8 }).map((_, index) => (
+                                            <div key={index} className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg">
+                                                <Skeleton className="h-5 w-5 rounded-full flex-shrink-0" />
+                                                <div className="flex-1">
+                                                    <Skeleton className="h-4 w-full mb-2" />
+                                                    <Skeleton className="h-3 w-3/4" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </DashboardLayout>

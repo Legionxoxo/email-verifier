@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { LogOut, User, Settings, Key, History } from 'lucide-react';
+import { LogOut, User, Settings, Key, History, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../ui';
 
@@ -21,18 +21,17 @@ interface DashboardLayoutProps {
 /**
  * Simple dashboard layout with header and main content
  * @param children - Page content
- * @param user - Current user data
  * @param onLogout - Logout handler
  * @returns DashboardLayout JSX element
  */
 export function DashboardLayout({
     children,
-    user,
     onLogout,
 }: DashboardLayoutProps) {
     try {
         const location = useLocation();
-        
+        const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
         const handleLogout = () => {
             try {
                 if (onLogout) {
@@ -59,102 +58,157 @@ export function DashboardLayout({
                                     <div className="h-8 w-8 bg-gray-900 rounded flex items-center justify-center">
                                         <span className="text-white font-bold text-sm">M</span>
                                     </div>
-                                    <div>
+                                    <div className="hidden sm:block">
                                         <h1 className="text-lg font-semibold text-gray-900">
-                                            MicroSAAS Dashboard
+                                            BrandNav
                                         </h1>
                                     </div>
                                 </Link>
                             </div>
 
                             {/* Navigation and user actions */}
-                            <div className="flex items-center space-x-4">
-                                {/* Navigation links */}
+                            <div className="flex items-center space-x-2">
+                                {/* Mobile menu button */}
+                                <button
+                                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                                    className="md:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 cursor-pointer"
+                                    aria-label="Toggle menu"
+                                >
+                                    {isMobileMenuOpen ? (
+                                        <X className="h-5 w-5" />
+                                    ) : (
+                                        <Menu className="h-5 w-5" />
+                                    )}
+                                </button>
+
+                                {/* Navigation links - Desktop */}
                                 <nav className="hidden md:flex items-center space-x-1">
                                     <Link
                                         to="/dashboard"
-                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
-                                            isActiveRoute('/dashboard')
-                                                ? 'bg-gray-100 text-gray-900'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${isActiveRoute('/dashboard')
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            }`}
                                     >
                                         Dashboard
                                     </Link>
                                     <Link
                                         to="/profile"
-                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
-                                            isActiveRoute('/profile')
-                                                ? 'bg-gray-100 text-gray-900'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${isActiveRoute('/profile')
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            }`}
                                     >
                                         <User className="h-4 w-4" />
                                         <span>Profile</span>
                                     </Link>
                                     <Link
                                         to="/settings"
-                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
-                                            isActiveRoute('/settings')
-                                                ? 'bg-gray-100 text-gray-900'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${isActiveRoute('/settings')
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            }`}
                                     >
                                         <Settings className="h-4 w-4" />
                                         <span>Settings</span>
                                     </Link>
                                     <Link
                                         to="/api-tokens"
-                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
-                                            isActiveRoute('/api-tokens')
-                                                ? 'bg-gray-100 text-gray-900'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${isActiveRoute('/api-tokens')
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            }`}
                                     >
                                         <Key className="h-4 w-4" />
                                         <span>API Tokens</span>
                                     </Link>
                                     <Link
                                         to="/history"
-                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${
-                                            isActiveRoute('/history')
-                                                ? 'bg-gray-100 text-gray-900'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
+                                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer flex items-center space-x-1 ${isActiveRoute('/history')
+                                            ? 'bg-gray-100 text-gray-900'
+                                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            }`}
                                     >
                                         <History className="h-4 w-4" />
                                         <span>History</span>
                                     </Link>
                                 </nav>
 
-                                {/* User info and logout */}
-                                <div className="flex items-center space-x-3">
-                                    <div className="hidden sm:block text-right">
-                                        <p className="text-sm font-medium text-gray-900">
-                                            {user?.name || 'User'}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                            {user?.email}
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center sm:hidden">
-                                        <User className="h-4 w-4 text-gray-600" />
-                                    </div>
-                                    
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handleLogout}
-                                        className="text-gray-600 hover:text-gray-900"
-                                    >
-                                        <LogOut className="h-4 w-4" />
-                                        <span className="hidden sm:inline ml-2">Sign out</span>
-                                    </Button>
-                                </div>
+                                {/* Logout button */}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleLogout}
+                                    className="text-gray-600 hover:text-gray-900 cursor-pointer"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                    <span className="hidden sm:inline ml-2">Sign out</span>
+                                </Button>
                             </div>
                         </div>
                     </div>
+
+                    {/* Mobile menu dropdown */}
+                    {isMobileMenuOpen && (
+                        <div className="md:hidden border-t border-gray-200 bg-white">
+                            <nav className="px-4 py-3 space-y-1">
+                                <Link
+                                    to="/dashboard"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${isActiveRoute('/dashboard')
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <span>Dashboard</span>
+                                </Link>
+                                <Link
+                                    to="/profile"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${isActiveRoute('/profile')
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <User className="h-4 w-4" />
+                                    <span>Profile</span>
+                                </Link>
+                                <Link
+                                    to="/settings"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${isActiveRoute('/settings')
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <Settings className="h-4 w-4" />
+                                    <span>Settings</span>
+                                </Link>
+                                <Link
+                                    to="/api-tokens"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${isActiveRoute('/api-tokens')
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <Key className="h-4 w-4" />
+                                    <span>API Tokens</span>
+                                </Link>
+                                <Link
+                                    to="/history"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${isActiveRoute('/history')
+                                        ? 'bg-gray-100 text-gray-900'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <History className="h-4 w-4" />
+                                    <span>History</span>
+                                </Link>
+                            </nav>
+                        </div>
+                    )}
                 </header>
 
                 {/* Main content */}
@@ -165,7 +219,7 @@ export function DashboardLayout({
         );
     } catch (error) {
         console.error('DashboardLayout render error:', error);
-        
+
         return (
             <div className="min-h-screen bg-gray-50 p-4">
                 <div className="max-w-4xl mx-auto">
