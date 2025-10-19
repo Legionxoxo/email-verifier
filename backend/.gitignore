@@ -1,5 +1,7 @@
 .env
 node_modules/
 .sql/
+!.sql/*.sql
+!.sql/*.sh
 coverage/
 csv/

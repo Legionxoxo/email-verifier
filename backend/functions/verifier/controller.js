@@ -444,11 +444,12 @@ class Controller {
 
 			if (!requestObj) return;
 
-			console.table({
-				greylisted_emails_len: greylisted_emails.length,
-				blacklisted_emails_len: blacklisted_emails.length,
-				recheck_required_len: recheck_required.length,
-			});
+			this.logger.debug(
+				`Partial results for ${request_id}: ` +
+				`greylisted=${greylisted_emails.length}, ` +
+				`blacklisted=${blacklisted_emails.length}, ` +
+				`recheck=${recheck_required.length}`
+			);
 
 			// incase greylisted and blacklisted emails are found, track them in database
 			if (
@@ -483,13 +484,14 @@ class Controller {
 						resultOld = archObj?.result;
 
 					if (resultOld) {
+						// CRITICAL: resultOld first, result second → new results overwrite old results
 						this.request_archive.set(request_id, {
 							...archObj,
-							result: new Map([...result, ...resultOld]),
+							result: new Map([...resultOld, ...result]),
 						});
 						await this.pushArchive(request_id, {
 							...archObj,
-							result: new Map([...result, ...resultOld]),
+							result: new Map([...resultOld, ...result]),
 						});
 					}
 				} else {
@@ -743,9 +745,14 @@ class Controller {
 		return results.map(result => {
 			let status, message;
 
+			// CRITICAL: Check if smtp object exists (BUG #5 fix)
 			if (result.error) {
 				status = 'unknown';
 				message = result.error_msg || 'Verification error';
+			} else if (!result.smtp) {
+				// Handle legacy or incomplete result format
+				status = 'unknown';
+				message = 'Incomplete verification data';
 			} else if (result.smtp.deliverable) {
 				status = 'valid';
 				message = 'Email verified successfully';
