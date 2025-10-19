@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { verificationApi } from '../../lib/api';
+import { Button } from '../ui/Button';
 
 
 // Interface for component props
@@ -110,19 +111,17 @@ export function SingleVerifier({ onVerifyingChange }: SingleVerifierProps) {
                 />
 
                 {/* Verify Button */}
-                <button
+                <Button
                     onClick={handleVerify}
                     disabled={isVerifying || !email.trim()}
+                    loading={isVerifying}
                     className="px-8 py-3 bg-[#4169E1] hover:bg-[#3558C7] text-white font-medium text-base
-                                rounded-xl transition-all duration-200 flex items-center justify-center gap-2
-                                disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300
-                                shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer
-                                min-w-[140px]"
+                                rounded-xl shadow-sm hover:shadow-md min-w-[140px]"
                     aria-label="Verify email button"
                 >
                     <span>Verify</span>
-                    <Search className="w-5 h-5" />
-                </button>
+                    <Search className="w-5 h-5 ml-2" />
+                </Button>
             </div>
         </div>
     );

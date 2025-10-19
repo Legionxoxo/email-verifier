@@ -12,8 +12,11 @@ import { useNavigate } from 'react-router-dom';
 import { parseCSVFullData, validateCSVFile, type CSVFullDataResult } from '../../lib/csvParser';
 import { verificationApi } from '../../lib/api';
 import { BulkVerifierStepOne } from './BulkVerifierStepOne';
-import { BulkVerifierStepTwo } from './BulkVerifierStepTwo';
 import { Button } from '../ui/Button';
+
+
+// LocalStorage key for CSV data
+const CSV_DATA_KEY = 'bulk_csv_verification_data';
 
 
 // Interface for component props
@@ -23,8 +26,8 @@ interface BulkVerifierProps {
 }
 
 
-// Step types
-type VerifierStep = 'upload' | 'preview' | 'column-select';
+// Step types (removed column-select as it's now a separate page)
+type VerifierStep = 'upload' | 'preview';
 
 
 /**
@@ -46,14 +49,12 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
     };
     const [isDragging, setIsDragging] = useState<boolean>(false);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
-    const [isVerifying, setIsVerifying] = useState<boolean>(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<CSVFullDataResult | null>(null);
     const [error, setError] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // API-related state
-    const [csvUploadId, setCsvUploadId] = useState<string>('');
     const [hasHeader, setHasHeader] = useState<boolean>(true);
 
 
@@ -82,13 +83,13 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
                 return;
             }
 
-            // Parse CSV locally for preview (only first 5 rows - lightweight)
+            // Parse CSV locally for preview only (first 10 rows - lightweight, no memory issues)
             console.log('Parsing CSV locally for preview...');
             const result = await parseCSVFullData(file, true); // Default to has_header = true
             console.log('Parse result:', result);
 
             // Set file and parsed data - move to preview step
-            // Backend will validate row/column limits during upload
+            // Full CSV file will be uploaded to backend for validation and processing
             setSelectedFile(file);
             setParsedData(result);
             changeStep('preview');
@@ -195,7 +196,6 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
             setSelectedFile(null);
             setParsedData(null);
             setError('');
-            setCsvUploadId('');
             setHasHeader(true);
             changeStep('upload');
             if (fileInputRef.current) {
@@ -258,9 +258,6 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
             const uploadResponse = await verificationApi.uploadCSV(formData);
             console.log('Upload & detection response:', uploadResponse);
 
-            // Store upload ID
-            setCsvUploadId(uploadResponse.csv_upload_id);
-
             // Update parsed data with detection results
             if (parsedData) {
                 parsedData.detectedEmailColumn = uploadResponse.detected_column;
@@ -270,8 +267,25 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
 
             console.log('=== CSV UPLOAD & DETECTION COMPLETED ===');
 
-            // Proceed to column selection
-            changeStep('column-select');
+            // Store only essential CSV data in localStorage (not the full rows to avoid quota issues)
+            // The full CSV is already uploaded to backend via csvUploadId
+            const csvDataToStore = {
+                csvUploadId: uploadResponse.csv_upload_id,
+                parsedData: {
+                    headers: parsedData?.headers || [],
+                    preview: parsedData?.preview || [],
+                    totalRows: parsedData?.totalRows || 0,
+                    detectedEmailColumn: uploadResponse.detected_column,
+                    detectionConfidence: uploadResponse.confidence,
+                    // Explicitly exclude rows array to avoid localStorage quota exceeded error
+                    rows: []
+                },
+                timestamp: Date.now()
+            };
+            localStorage.setItem(CSV_DATA_KEY, JSON.stringify(csvDataToStore));
+
+            // Navigate to the separate CSV verification page
+            navigate('/dashboard/csv');
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to upload CSV';
@@ -284,55 +298,14 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
     };
 
 
-    /**
-     * Handle step two completion (submit verification to backend)
-     */
-    const handleStepTwoVerify = async (emails: string[], selectedColumn: string) => {
-        try {
-            console.log('Submitting CSV for verification:', {
-                csvUploadId,
-                selectedColumn,
-                emailCount: emails.length
-            });
-
-            // Disable button immediately to prevent multiple clicks
-            setIsVerifying(true);
-
-            // Get the column index from parsedData
-            const columnIndex = parsedData?.headers.indexOf(selectedColumn) ?? -1;
-            if (columnIndex === -1) {
-                throw new Error('Invalid column selection');
-            }
-
-            // Submit to backend API
-            const verificationResponse = await verificationApi.submitCSVVerification(csvUploadId, columnIndex);
-            console.log('Verification response:', verificationResponse);
-
-            // Show success message
-            toast.success(`Verification started for ${verificationResponse.total_emails} emails!`);
-
-            // Navigate to verification details page
-            navigate(`/verify/${verificationResponse.verification_request_id}`);
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to submit verification';
-            console.error('Verification error:', error);
-            toast.error(errorMessage);
-            // Reset state on error
-            setIsVerifying(false);
-            // Stay on column select step so user can try again
-        }
-    };
 
 
     /**
-     * Handle back navigation
+     * Handle back navigation (only from preview to upload now)
      */
     const handleBack = () => {
         try {
-            if (currentStep === 'column-select') {
-                changeStep('preview');
-            } else if (currentStep === 'preview') {
+            if (currentStep === 'preview') {
                 clearFile();
             }
         } catch (error) {
@@ -487,43 +460,10 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
     };
 
 
-    /**
-     * Render column select step
-     */
-    const renderColumnSelectStep = () => {
-        if (!parsedData) return null;
-
-        return (
-            <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-                {/* Back button - returns to preview step */}
-                <div className="mb-6">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleBack}
-                        className="flex items-center space-x-1 cursor-pointer"
-                    >
-                        <ArrowLeft className="h-4 w-4" />
-                        <span>Back to Preview</span>
-                    </Button>
-                </div>
-
-                <BulkVerifierStepTwo
-                    parsedData={parsedData}
-                    onVerify={handleStepTwoVerify}
-                    isVerifying={isVerifying}
-                />
-            </div>
-        );
-    };
-
-
-    // Render current step
+    // Render current step (only upload and preview now, column-select is a separate page)
     switch (currentStep) {
         case 'preview':
             return renderPreviewStep();
-        case 'column-select':
-            return renderColumnSelectStep();
         default:
             return renderUploadStep();
     }

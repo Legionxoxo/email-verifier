@@ -19,7 +19,8 @@ import {
     APITokenPage,
     HistoryPage,
     VerificationProgressPage,
-    VerificationResultsPage
+    VerificationResultsPage,
+    BulkCSVVerificationPage
 } from './pages';
 
 
@@ -97,6 +98,15 @@ export default function App() {
                                 element={
                                     <ProtectedRoute>
                                         <DashboardPage />
+                                    </ProtectedRoute>
+                                }
+                            />
+
+                            <Route
+                                path="/dashboard/csv"
+                                element={
+                                    <ProtectedRoute>
+                                        <BulkCSVVerificationPage />
                                     </ProtectedRoute>
                                 }
                             />

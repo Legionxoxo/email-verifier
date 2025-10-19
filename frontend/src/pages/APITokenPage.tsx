@@ -371,6 +371,7 @@ export function APITokenPage() {
                                                     setTokenName('');
                                                     setExpiryDays('');
                                                 }}
+                                                disabled={loading}
                                                 className="cursor-pointer"
                                             >
                                                 Cancel
@@ -379,9 +380,10 @@ export function APITokenPage() {
                                                 variant="primary"
                                                 onClick={handleCreateToken}
                                                 disabled={loading || !tokenName.trim()}
+                                                loading={loading}
                                                 className="cursor-pointer"
                                             >
-                                                {loading ? 'Creating...' : 'Create Token'}
+                                                Create Token
                                             </Button>
                                         </div>
                                     </>

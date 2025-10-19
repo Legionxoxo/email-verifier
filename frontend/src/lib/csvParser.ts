@@ -169,11 +169,12 @@ function isValidEmailFormat(email: string): boolean {
 
 
 /**
- * Parse CSV file and return full data with headers
+ * Parse CSV file for preview only (first 10 rows)
+ * Full CSV is uploaded to backend - frontend only needs preview for column selection
  * Used for bulk verifier multi-step flow
  * @param file - CSV file to parse
  * @param hasHeader - Whether the CSV file has a header row
- * @returns Promise with full CSV data
+ * @returns Promise with CSV preview data (headers, preview rows, detected email column)
  */
 export async function parseCSVFullData(file: File, hasHeader: boolean = true): Promise<CSVFullDataResult> {
     try {
@@ -181,6 +182,7 @@ export async function parseCSVFullData(file: File, hasHeader: boolean = true): P
             Papa.parse(file, {
                 header: hasHeader,
                 skipEmptyLines: true,
+                preview: 10, // Only parse first 10 rows for preview (lightweight for large files)
                 complete: (results) => {
                     try {
                         let headers: string[];

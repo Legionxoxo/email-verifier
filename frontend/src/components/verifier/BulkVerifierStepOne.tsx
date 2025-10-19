@@ -168,6 +168,7 @@ export function BulkVerifierStepOne({
                 <Button
                     variant="outline"
                     onClick={onCancel}
+                    disabled={isProcessing}
                     className="cursor-pointer"
                 >
                     Cancel
@@ -176,9 +177,10 @@ export function BulkVerifierStepOne({
                     variant="primary"
                     onClick={handleUploadCSV}
                     disabled={!listName.trim() || isProcessing}
+                    loading={isProcessing}
                     className="cursor-pointer"
                 >
-                    {isProcessing ? 'Uploading...' : 'Upload CSV'}
+                    Upload CSV
                 </Button>
             </div>
         </div>

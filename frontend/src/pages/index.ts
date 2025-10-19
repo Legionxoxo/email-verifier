@@ -14,3 +14,4 @@ export { APITokenPage } from './APITokenPage';
 export { HistoryPage } from './HistoryPage';
 export { VerificationProgressPage } from './VerificationProgressPage';
 export { VerificationResultsPage } from './VerificationResultsPage';
+export { BulkCSVVerificationPage } from './BulkCSVVerificationPage';

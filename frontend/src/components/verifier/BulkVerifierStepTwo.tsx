@@ -3,18 +3,17 @@
  * Column selection for email verification
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Mail, Info, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import type { CSVFullDataResult } from '../../lib/csvParser';
-import { extractEmailsFromColumn } from '../../lib/csvParser';
 
 
 // Interface for component props
 interface BulkVerifierStepTwoProps {
     parsedData: CSVFullDataResult;
-    onVerify: (emails: string[], selectedColumn: string) => void;
+    onVerify: (selectedColumn: string) => void;
     isVerifying?: boolean;
 }
 
@@ -29,39 +28,32 @@ export function BulkVerifierStepTwo({
     onVerify,
     isVerifying = false
 }: BulkVerifierStepTwoProps) {
+    // Normalize column name for comparison (handle space vs underscore mismatch)
+    const normalizeColumnName = (name: string | null): string => {
+        if (!name) return '';
+        // Replace underscores with spaces and normalize whitespace
+        return name.replace(/_/g, ' ').trim();
+    };
+
+    // Find the actual header that matches the detected column
+    const detectedColumnRaw = parsedData.detectedEmailColumn;
+    const normalizedDetected = normalizeColumnName(detectedColumnRaw);
+    const detectedColumn = parsedData.headers.find(h => normalizeColumnName(h) === normalizedDetected) || null;
+
     const [selectedColumn, setSelectedColumn] = useState<string>(
-        parsedData.detectedEmailColumn || parsedData.headers[0] || ''
+        detectedColumn || parsedData.headers[0] || ''
     );
-    const [emailStats, setEmailStats] = useState<{
-        uniqueCount: number;
-        errors: number;
-        duplicates: number;
-    }>({
-        uniqueCount: 0,
-        errors: 0,
-        duplicates: 0
-    });
+    const [userHasSelected, setUserHasSelected] = useState<boolean>(false);
 
 
-    // Calculate email stats when column selection changes
-    useEffect(() => {
-        try {
-            if (selectedColumn) {
-                const { emails, errors, duplicateCount } = extractEmailsFromColumn(
-                    parsedData.rows,
-                    selectedColumn
-                );
+    // Email stats calculation removed - backend handles email extraction and validation
+    // since the CSV is already uploaded and stored on the server
 
-                setEmailStats({
-                    uniqueCount: emails.length,
-                    errors,
-                    duplicates: duplicateCount
-                });
-            }
-        } catch (error) {
-            console.error('Email stats calculation error:', error);
-        }
-    }, [selectedColumn, parsedData.rows]);
+
+    const handleColumnSelect = (header: string) => {
+        setSelectedColumn(header);
+        setUserHasSelected(true);
+    };
 
 
     const handleVerifyEmails = () => {
@@ -70,11 +62,68 @@ export function BulkVerifierStepTwo({
                 return;
             }
 
-            const { emails } = extractEmailsFromColumn(parsedData.rows, selectedColumn);
-            onVerify(emails, selectedColumn);
+            // Backend will extract emails from the uploaded CSV using the selected column
+            // No need to extract emails on frontend since file is already uploaded
+            onVerify(selectedColumn);
         } catch (error) {
             console.error('Verify emails error:', error);
         }
+    };
+
+
+    // Get header background color based on confidence and selection
+    const getHeaderBgColor = (header: string): string => {
+        const isSelected = selectedColumn === header;
+        const isDetected = detectedColumn === header;
+        const confidence = parsedData.detectionConfidence || 0;
+
+        // User manually selected this column - dark green (highest priority)
+        if (userHasSelected && isSelected) {
+            return 'bg-green-700 text-white';
+        }
+
+        // Auto-detected column showing before user selection (confidence-based colors)
+        // Only show if detectedColumn exists
+        if (!userHasSelected && isDetected && detectedColumn) {
+            if (confidence >= 80) {
+                return 'bg-green-500 text-white';
+            } else if (confidence >= 50) {
+                return 'bg-orange-400 text-white';
+            } else {
+                return 'bg-red-400 text-white';
+            }
+        }
+
+        // Default state - no highlighting
+        return 'text-[#2F327D] hover:bg-green-100';
+    };
+
+
+    // Get cell background color based on confidence and selection
+    const getCellBgColor = (header: string): string => {
+        const isSelected = selectedColumn === header;
+        const isDetected = detectedColumn === header;
+        const confidence = parsedData.detectionConfidence || 0;
+
+        // User manually selected this column - dark green tint (highest priority)
+        if (userHasSelected && isSelected) {
+            return 'bg-green-100 text-gray-900 font-medium';
+        }
+
+        // Auto-detected column showing before user selection (confidence-based colors)
+        // Only show if detectedColumn exists
+        if (!userHasSelected && isDetected && detectedColumn) {
+            if (confidence >= 80) {
+                return 'bg-green-50 text-gray-900 font-medium';
+            } else if (confidence >= 50) {
+                return 'bg-orange-50 text-gray-900 font-medium';
+            } else {
+                return 'bg-red-50 text-gray-900 font-medium';
+            }
+        }
+
+        // Default state - no highlighting
+        return 'text-gray-700';
     };
 
 
@@ -114,14 +163,11 @@ export function BulkVerifierStepTwo({
                                     {parsedData.headers.map((header) => (
                                         <th
                                             key={header}
-                                            onClick={() => setSelectedColumn(header)}
+                                            onClick={() => handleColumnSelect(header)}
                                             className={`
                                                 px-4 py-3 text-left text-sm font-semibold cursor-pointer
-                                                transition-all duration-300
-                                                ${selectedColumn === header
-                                                    ? 'bg-green-600 text-white'
-                                                    : 'text-[#2F327D] hover:bg-green-100'
-                                                }
+                                                transition-colors duration-150
+                                                ${getHeaderBgColor(header)}
                                             `}
                                         >
                                             {header}
@@ -135,14 +181,10 @@ export function BulkVerifierStepTwo({
                                         {parsedData.headers.map((header) => (
                                             <td
                                                 key={header}
-                                                onClick={() => setSelectedColumn(header)}
                                                 className={`
-                                                    px-4 py-3 text-sm whitespace-nowrap cursor-pointer
-                                                    transition-all duration-300
-                                                    ${selectedColumn === header
-                                                        ? 'bg-green-50 text-gray-900 font-medium'
-                                                        : 'text-gray-700'
-                                                    }
+                                                    px-4 py-3 text-sm whitespace-nowrap
+                                                    transition-colors duration-150
+                                                    ${getCellBgColor(header)}
                                                 `}
                                             >
                                                 {row[header] || '-'}
@@ -169,7 +211,7 @@ export function BulkVerifierStepTwo({
                 <Button
                     variant="primary"
                     onClick={handleVerifyEmails}
-                    disabled={isVerifying || !selectedColumn || emailStats.uniqueCount === 0}
+                    disabled={isVerifying || !selectedColumn}
                     className="cursor-pointer"
                 >
                     {isVerifying ? 'Verifying...' : 'Verify emails'}
