@@ -3,7 +3,7 @@
  * Column selection for email verification
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Mail, Info, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
@@ -45,14 +45,35 @@ export function BulkVerifierStepTwo({
     );
     const [userHasSelected, setUserHasSelected] = useState<boolean>(false);
 
+    // Ref for the detected column to scroll into view
+    const detectedColumnRef = useRef<HTMLTableCellElement>(null);
+
+
+    // Auto-scroll to detected column on mount
+    useEffect(() => {
+        if (detectedColumnRef.current && detectedColumn) {
+            detectedColumnRef.current.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+                inline: 'center'
+            });
+        }
+    }, [detectedColumn]);
+
 
     // Email stats calculation removed - backend handles email extraction and validation
     // since the CSV is already uploaded and stored on the server
 
 
     const handleColumnSelect = (header: string) => {
-        setSelectedColumn(header);
-        setUserHasSelected(true);
+        // Step 1: Clear previous selection first (force re-render to remove old highlight)
+        setSelectedColumn('');
+
+        // Step 2: Then set new selection after 100ms delay
+        setTimeout(() => {
+            setSelectedColumn(header);
+            setUserHasSelected(true);
+        }, 100);
     };
 
 
@@ -148,7 +169,7 @@ export function BulkVerifierStepTwo({
                                         : 'Low confidence in email detection'}
                                 </p>
                                 <p className="text-xs text-orange-700 mt-1">
-                                    We detected "{selectedColumn}" as the email column with {parsedData.detectionConfidence.toFixed(0)}% confidence.
+                                    We detected "{detectedColumn}" as the email column with {parsedData.detectionConfidence.toFixed(0)}% confidence.
                                     Please verify the selection below or choose a different column.
                                 </p>
                             </div>
@@ -163,10 +184,10 @@ export function BulkVerifierStepTwo({
                                     {parsedData.headers.map((header) => (
                                         <th
                                             key={header}
+                                            ref={header === detectedColumn ? detectedColumnRef : null}
                                             onClick={() => handleColumnSelect(header)}
                                             className={`
                                                 px-4 py-3 text-left text-sm font-semibold cursor-pointer
-                                                transition-colors duration-150
                                                 ${getHeaderBgColor(header)}
                                             `}
                                         >
@@ -183,7 +204,6 @@ export function BulkVerifierStepTwo({
                                                 key={header}
                                                 className={`
                                                     px-4 py-3 text-sm whitespace-nowrap
-                                                    transition-colors duration-150
                                                     ${getCellBgColor(header)}
                                                 `}
                                             >
