@@ -36,7 +36,7 @@ export function TableSkeleton({ rows = 5, columns = 4 }: TableSkeletonProps) {
     return (
         <div className="space-y-3">
             {Array.from({ length: rows }).map((_, rowIndex) => (
-                <div key={rowIndex} className="flex space-x-4 items-center py-3 px-6">
+                <div key={rowIndex} className="flex space-x-4 items-start py-3 px-6">
                     {Array.from({ length: columns }).map((_, colIndex) => (
                         <div
                             key={colIndex}
