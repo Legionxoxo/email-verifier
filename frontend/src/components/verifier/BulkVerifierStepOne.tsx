@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { CheckCircle2, FileText, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, FileText, AlertTriangle, XCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card, CardContent } from '../ui/Card';
@@ -18,6 +18,8 @@ interface BulkVerifierStepOneProps {
     onNext: (listName: string) => Promise<void>;
     onHeaderCheckboxChange: (hasHeader: boolean) => void;
     onCancel: () => void;
+    error?: string;
+    isProcessing?: boolean;
 }
 
 
@@ -31,7 +33,9 @@ export function BulkVerifierStepOne({
     parsedData,
     onNext,
     onHeaderCheckboxChange,
-    onCancel
+    onCancel,
+    error,
+    isProcessing = false
 }: BulkVerifierStepOneProps) {
     const [listName, setListName] = useState<string>(file.name.replace('.csv', ''));
     const [hasHeader, setHasHeader] = useState<boolean>(true);
@@ -144,6 +148,21 @@ export function BulkVerifierStepOne({
                 </CardContent>
             </Card>
 
+            {/* Error Display */}
+            {error && (
+                <Card className="border-red-200 bg-red-50">
+                    <CardContent className="p-4">
+                        <div className="flex items-start space-x-3">
+                            <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-red-700">Upload Failed</p>
+                                <p className="text-sm text-red-600 mt-1">{error}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Upload button */}
             <div className="flex justify-end space-x-4">
                 <Button
@@ -156,10 +175,10 @@ export function BulkVerifierStepOne({
                 <Button
                     variant="primary"
                     onClick={handleUploadCSV}
-                    disabled={!listName.trim()}
+                    disabled={!listName.trim() || isProcessing}
                     className="cursor-pointer"
                 >
-                    Upload CSV
+                    {isProcessing ? 'Uploading...' : 'Upload CSV'}
                 </Button>
             </div>
         </div>

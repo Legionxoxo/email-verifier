@@ -4,7 +4,7 @@
  *
  * This module provides:
  * - Single email verification endpoints (verifySingleEmail)
- * - CSV bulk verification endpoints (uploadCSV, detectEmailColumn, submitCSVVerification, downloadCSVResults)
+ * - CSV bulk verification endpoints (uploadCSV with detection, submitCSVVerification, downloadCSVResults)
  * - API programmatic verification endpoint (verifyApiRequest)
  * - Separate status and results endpoints for ALL verification types
  * - Verification history endpoints (getHistory)
@@ -20,7 +20,6 @@ const { verifyApiRequest } = require('../../functions/route_fns/verify/apiVerifi
 const {
 	upload,
 	uploadCSV,
-	detectEmailColumn,
 	submitCSVVerification,
 	downloadCSVResults,
 } = require('../../functions/route_fns/verify/bulkCSVVerification');
@@ -97,13 +96,14 @@ router.get('/verification/:verification_request_id/results', authenticateEither,
 
 /**
  * POST /api/verifier/csv/upload
- * Upload CSV file for email verification
+ * Upload CSV file and detect email column in one step
  * Requires authentication and multipart/form-data
+ * Body parameters: csvFile (file), list_name (string), has_header (boolean)
  *
  * @function uploadCSV - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
- * @returns {Promise<void>} Sends JSON response with CSV upload details
+ * @returns {Promise<void>} Sends JSON response with CSV upload details and email detection results
  */
 router.post('/csv/upload', authenticate, upload.single('csvFile'), (err, req, res, next) => {
 	if (err) {
@@ -126,19 +126,6 @@ router.post('/csv/upload', authenticate, upload.single('csvFile'), (err, req, re
 	}
 	next();
 }, uploadCSV);
-
-
-/**
- * POST /api/verifier/csv/detect-email
- * Detect email column in uploaded CSV
- * Requires authentication
- *
- * @function detectEmailColumn - From bulkCSVVerification.js
- * @param {import('express').Request} req - Express request object
- * @param {import('express').Response} res - Express response object
- * @returns {Promise<void>} Sends JSON response with detected email column
- */
-router.post('/csv/detect-email', authenticate, detectEmailColumn);
 
 
 /**

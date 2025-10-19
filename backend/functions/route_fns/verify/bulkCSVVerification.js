@@ -1,6 +1,6 @@
 /**
  * Bulk CSV email verification route functions
- * Handles ONLY CSV-specific operations: upload, email detection, and submission
+ * Handles CSV-specific operations: upload (with automatic email detection) and submission
  *
  * For status checking, see verificationStatus.js
  * For results retrieval, see verificationResults.js
@@ -174,8 +174,8 @@ const upload = multer({
 
 
 /**
- * Upload and parse CSV file
- * Stores file on disk and extracts metadata
+ * Upload and parse CSV file, then detect email column
+ * Consolidated function that handles upload + email detection in one step
  *
  * @param {MulterRequest} req - Express request object
  * @param {import('express').Response} res - Express response object
@@ -195,7 +195,7 @@ async function uploadCSV(req, res) {
 			});
 		}
 
-		// Get has_header and list_name from request body
+		// Get has_header and list_name from request body (now required)
 		const hasHeader = req.body.has_header !== undefined
 			? (req.body.has_header === true || req.body.has_header === 'true' || req.body.has_header === '1')
 			: true;
@@ -287,121 +287,19 @@ async function uploadCSV(req, res) {
 		// Adjust row count based on hasHeader
 		const dataRowCount = hasHeader ? totalRows : totalRows + 1;
 
-		// Insert metadata into database
-		const db = getDb();
-		const now = Date.now();
 
-		const stmt = db.prepare(`
-            INSERT INTO csv_uploads
-            (csv_upload_id, user_id, list_name, original_filename, file_path, file_size,
-             has_header, headers, preview_data, row_count, column_count, upload_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-		stmt.run(
-			csvUploadId,
-			user_id,
-			listName,
-			originalFilename,
-			filePath,
-			req.file.size,
-			hasHeader ? 1 : 0,
-			JSON.stringify(headers),
-			JSON.stringify(preview),
-			dataRowCount,
-			columnCount,
-			'uploaded',
-			now,
-			now
-		);
-
-		return res.json({
-			success: true,
-			data: {
-				csv_upload_id: csvUploadId,
-				original_filename: originalFilename,
-				has_header: hasHeader,
-				preview: preview,
-				headers: headers,
-				row_count: dataRowCount,
-				column_count: columnCount,
-				file_size: req.file.size,
-				upload_status: 'uploaded',
-			},
-		});
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error('CSV upload error:', errorMessage);
-
-		// Clean up uploaded file on error
-		if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-			fs.unlinkSync(req.file.path);
-		}
-
-		return res.status(400).json({
-			success: false,
-			message: errorMessage || 'CSV upload failed',
-		});
-	} finally {
-		console.debug('CSV upload process completed');
-	}
-}
-
-
-/**
- * Detect email column in CSV using scoring algorithm
- *
- * @param {import('express').Request} req - Express request object
- * @param {import('express').Response} res - Express response object
- * @returns {Promise<import('express').Response | void>}
- */
-async function detectEmailColumn(req, res) {
-	try {
-		const { csv_upload_id, list_name, has_header } = req.body;
-		const user_id = req.user?.id;
-
-		if (!csv_upload_id) {
-			return res.status(400).json({
-				success: false,
-				message: 'CSV upload ID is required',
-			});
-		}
-
-		// Get CSV upload from database
-		const db = getDb();
-		const upload = /** @type {CsvUploadRow | undefined} */ (
-			db.prepare('SELECT * FROM csv_uploads WHERE csv_upload_id = ? AND user_id = ?').get(csv_upload_id, user_id)
-		);
-
-		if (!upload) {
-			return res.status(404).json({
-				success: false,
-				message: 'CSV upload not found',
-			});
-		}
-
-		const filePath = upload.file_path;
-		// Use hasHeader from request body if provided, otherwise use database value
-		const hasHeader = has_header !== undefined ? (has_header === true || has_header === 'true') : (upload.has_header === 1);
-		let headers = JSON.parse(upload.headers);
-
-		// If user changed has_header to false, we need to physically modify the CSV file to add generic headers
-		const previousHasHeader = upload.has_header === 1;
-		const headerChanged = hasHeader !== previousHasHeader;
-
-		if (headerChanged && !hasHeader) {
-			// Need to add generic headers to the actual CSV file
+		// If CSV has no header, physically modify the file to add generic headers
+		if (!hasHeader) {
+			console.log('CSV has no header - adding generic headers to file');
 			const tempPath = `${filePath}.temp`;
 			const writeStream = fs.createWriteStream(tempPath);
 			const readStream = fs.createReadStream(filePath);
-
-			// Generate new generic headers based on column count
-			headers = headers.map((_, i) => `column${i + 1}`);
 
 			let firstRow = true;
 			await new Promise((resolve, reject) => {
 				Papa.parse(readStream, {
 					header: false,
+					skipEmptyLines: true,
 					step: (results) => {
 						const row = /** @type {string[]} */ (results.data);
 
@@ -422,32 +320,43 @@ async function detectEmailColumn(req, res) {
 				});
 			});
 
-			// Replace original file
+			// Replace original file with modified file
 			fs.unlinkSync(filePath);
 			fs.renameSync(tempPath, filePath);
+
+			console.log('Generic headers added to CSV file');
 		}
 
+
+		// EMAIL DETECTION - Run immediately after parsing
 		const columnScores = new Map();
 		const emailRegex =
 			/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-		let totalRows = 0;
-		let rowIndex = 0;
 
-		const stream = fs.createReadStream(filePath);
+		let detectionRowIndex = 0;
+		let detectionTotalRows = 0;
+		const detectionStream = fs.createReadStream(filePath);
 
 		await new Promise((resolve, reject) => {
-			Papa.parse(stream, {
-				header: false, // Manual parsing to avoid dot issues
+			Papa.parse(detectionStream, {
+				header: false,
+				skipEmptyLines: true,
 				step: (results) => {
 					const row = /** @type {string[]} */ (results.data);
 
-					// Skip header row - file now ALWAYS has headers after potential modification
-					if (rowIndex === 0) {
-						rowIndex++;
+					// Skip header row (file always has headers now after modification above)
+					if (detectionRowIndex === 0) {
+						detectionRowIndex++;
 						return;
 					}
 
-					totalRows++;
+					// Skip empty rows
+					if (!row || row.length === 0 || row.every(cell => !cell || !cell.trim())) {
+						detectionRowIndex++;
+						return;
+					}
+
+					detectionTotalRows++;
 
 					// Score each column
 					row.forEach((value, columnIndex) => {
@@ -462,7 +371,7 @@ async function detectEmailColumn(req, res) {
 						}
 					});
 
-					rowIndex++;
+					detectionRowIndex++;
 				},
 				complete: resolve,
 				error: reject,
@@ -484,41 +393,55 @@ async function detectEmailColumn(req, res) {
 			}
 		}
 
-		const confidence = totalRows > 0 ? (bestScore / totalRows) * 100 : 0;
+		const confidence = detectionTotalRows > 0 ? (bestScore / detectionTotalRows) * 100 : 0;
 
-		// Update database with list_name, has_header, headers, and detection results
+
+		// Insert metadata into database with detection results
+		const db = getDb();
 		const now = Date.now();
-		const updateStmt = db.prepare(`
-            UPDATE csv_uploads
-            SET list_name = ?,
-                has_header = ?,
-                headers = ?,
-                selected_email_column = ?,
-                selected_email_column_index = ?,
-                column_scores = ?,
-                detection_confidence = ?,
-                upload_status = ?,
-                updated_at = ?
-            WHERE csv_upload_id = ?
+
+		const stmt = db.prepare(`
+            INSERT INTO csv_uploads
+            (csv_upload_id, user_id, list_name, original_filename, file_path, file_size,
+             has_header, headers, preview_data, row_count, column_count,
+             selected_email_column, selected_email_column_index, column_scores, detection_confidence,
+             upload_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-		updateStmt.run(
-			list_name || null,
-			1, // After modification, CSV always has headers now (either original or generic)
+		stmt.run(
+			csvUploadId,
+			user_id,
+			listName,
+			originalFilename,
+			filePath,
+			req.file.size,
+			1, // Always 1 - if originally no header, we added generic headers above
 			JSON.stringify(headers),
+			JSON.stringify(preview),
+			dataRowCount,
+			columnCount,
 			bestColumn,
 			bestColumnIndex,
 			JSON.stringify(Object.fromEntries(columnScores)),
 			confidence,
 			'ready',
 			now,
-			csv_upload_id
+			now
 		);
 
 		return res.json({
 			success: true,
 			data: {
-				csv_upload_id: csv_upload_id,
+				csv_upload_id: csvUploadId,
+				original_filename: originalFilename,
+				list_name: listName,
+				has_header: true, // Always true - we add generic headers if not present
+				preview: preview,
+				headers: headers,
+				row_count: dataRowCount,
+				column_count: columnCount,
+				file_size: req.file.size,
 				detected_column: bestColumn,
 				detected_column_index: bestColumnIndex,
 				confidence: parseFloat(confidence.toFixed(2)),
@@ -528,14 +451,19 @@ async function detectEmailColumn(req, res) {
 		});
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error('Email detection error:', errorMessage);
+		console.error('CSV upload error:', errorMessage);
 
-		return res.status(500).json({
+		// Clean up uploaded file on error
+		if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+			fs.unlinkSync(req.file.path);
+		}
+
+		return res.status(400).json({
 			success: false,
-			message: 'Email detection failed',
+			message: errorMessage || 'CSV upload failed',
 		});
 	} finally {
-		console.debug('Email detection process completed');
+		console.debug('CSV upload process completed');
 	}
 }
 
@@ -860,7 +788,6 @@ async function downloadCSVResults(req, res) {
 module.exports = {
 	upload,
 	uploadCSV,
-	detectEmailColumn,
 	submitCSVVerification,
 	downloadCSVResults,
 };

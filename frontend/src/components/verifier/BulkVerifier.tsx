@@ -19,7 +19,6 @@ import { Button } from '../ui/Button';
 // Interface for component props
 interface BulkVerifierProps {
     maxFileSizeMB?: number;
-    maxRows?: number;
     onStepChange?: (isUploadStep: boolean) => void;
 }
 
@@ -33,7 +32,7 @@ type VerifierStep = 'upload' | 'preview' | 'column-select';
  * @param props - Component props
  * @returns JSX element
  */
-export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChange }: BulkVerifierProps) {
+export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifierProps) {
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState<VerifierStep>('upload');
 
@@ -59,11 +58,11 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
 
 
     /**
-     * Handle file selection and upload to backend
+     * Handle file selection and local parsing (no backend call yet)
      */
     const handleFileSelect = async (file: File) => {
         try {
-            console.log('=== BULK CSV UPLOAD STARTED ===');
+            console.log('=== FILE SELECTED ===');
             console.log('File selected:', file.name);
             console.log('File size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
             console.log('File type:', file.type);
@@ -83,42 +82,18 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                 return;
             }
 
-            // Create FormData for upload
-            const formData = new FormData();
-            formData.append('csvFile', file);
+            // Parse CSV locally for preview (only first 5 rows - lightweight)
+            console.log('Parsing CSV locally for preview...');
+            const result = await parseCSVFullData(file, true); // Default to has_header = true
+            console.log('Parse result:', result);
 
-            // Upload to backend (without listName and hasHeader - those come later)
-            console.log('Uploading CSV to backend...');
-            const uploadResponse = await verificationApi.uploadCSV(formData);
-            console.log('Upload response:', uploadResponse);
-
-            // Store upload ID
-            setCsvUploadId(uploadResponse.csv_upload_id);
-
-            // Convert backend response to local format for preview
-            const parsedData: CSVFullDataResult = {
-                headers: uploadResponse.headers,
-                rows: uploadResponse.preview,
-                preview: uploadResponse.preview,
-                totalRows: uploadResponse.row_count,
-                detectedEmailColumn: null
-            };
-
-            // Check row limit
-            if (uploadResponse.row_count > maxRows) {
-                console.log('Row limit exceeded:', uploadResponse.row_count, '>', maxRows);
-                const errorMsg = `File contains ${uploadResponse.row_count} rows. Maximum allowed is ${maxRows.toLocaleString()}.`;
-                setError(errorMsg);
-                toast.error(errorMsg);
-                return;
-            }
-
-            // Set file and parsed data (detection will be done in step one after user confirms listName and hasHeader)
+            // Set file and parsed data - move to preview step
+            // Backend will validate row/column limits during upload
             setSelectedFile(file);
-            setParsedData(parsedData);
+            setParsedData(result);
             changeStep('preview');
 
-            console.log('=== BULK CSV UPLOAD COMPLETED ===');
+            console.log('=== FILE PARSED LOCALLY ===');
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
@@ -127,7 +102,6 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
             toast.error(errorMessage);
             setSelectedFile(null);
             setParsedData(null);
-            setCsvUploadId('');
         } finally {
             setIsProcessing(false);
         }
@@ -257,37 +231,52 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
 
 
     /**
-     * Handle step one completion (preview -> column select)
-     * Now receives listName from Step One and triggers email detection
+     * Handle step one completion (preview -> upload to backend with detection)
+     * Uploads CSV file with list_name and has_header, receives detection results
      */
     const handleStepOneNext = async (listName: string) => {
         try {
-            console.log('=== EMAIL DETECTION STARTED ===');
+            console.log('=== CSV UPLOAD & DETECTION STARTED ===');
             console.log('List name:', listName);
             console.log('Has header:', hasHeader);
-            console.log('CSV upload ID:', csvUploadId);
+
+            if (!selectedFile) {
+                throw new Error('No file selected');
+            }
 
             setIsProcessing(true);
+            setError(''); // Clear any previous errors
 
-            // Trigger email detection with list name and header flag
-            const detectionResponse = await verificationApi.detectEmailColumn(csvUploadId, listName, hasHeader);
-            console.log('Detection response:', detectionResponse);
+            // Create FormData with file, list_name, and has_header
+            const formData = new FormData();
+            formData.append('csvFile', selectedFile);
+            formData.append('list_name', listName);
+            formData.append('has_header', hasHeader.toString());
 
-            // Update parsed data with detected email column and confidence
+            // Upload to backend - now includes detection in one call
+            console.log('Uploading CSV to backend with detection...');
+            const uploadResponse = await verificationApi.uploadCSV(formData);
+            console.log('Upload & detection response:', uploadResponse);
+
+            // Store upload ID
+            setCsvUploadId(uploadResponse.csv_upload_id);
+
+            // Update parsed data with detection results
             if (parsedData) {
-                parsedData.detectedEmailColumn = detectionResponse.detected_column;
-                parsedData.detectionConfidence = detectionResponse.confidence;
+                parsedData.detectedEmailColumn = uploadResponse.detected_column;
+                parsedData.detectionConfidence = uploadResponse.confidence;
                 setParsedData({ ...parsedData });
             }
 
-            console.log('=== EMAIL DETECTION COMPLETED ===');
+            console.log('=== CSV UPLOAD & DETECTION COMPLETED ===');
 
             // Proceed to column selection
             changeStep('column-select');
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to detect email column';
-            console.error('Email detection error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to upload CSV';
+            console.error('CSV upload error:', error);
+            setError(errorMessage);
             toast.error(errorMessage);
         } finally {
             setIsProcessing(false);
@@ -452,7 +441,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
 
                                 {/* File Info */}
                                 <p className="text-[10px] text-gray-400 font-medium mt-1">
-                                    Max {maxRows.toLocaleString()} rows ({maxFileSizeMB}MB)
+                                    Max {maxFileSizeMB}MB
                                 </p>
                             </>
                         )}
@@ -490,6 +479,8 @@ export function BulkVerifier({ maxFileSizeMB = 100, maxRows = 50000, onStepChang
                     onNext={handleStepOneNext}
                     onHeaderCheckboxChange={handleHeaderCheckboxChange}
                     onCancel={clearFile}
+                    error={error}
+                    isProcessing={isProcessing}
                 />
             </div>
         );

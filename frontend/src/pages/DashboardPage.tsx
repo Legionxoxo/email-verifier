@@ -65,7 +65,6 @@ export function DashboardPage() {
                             >
                                 <BulkVerifier
                                     maxFileSizeMB={100}
-                                    maxRows={50000}
                                     onStepChange={setShowSingleVerifier}
                                 />
                             </motion.div>

@@ -62,8 +62,8 @@ const BCRYPT_ROUNDS = getEnvVar('BCRYPT_ROUNDS', '12', false);
 
 // CSV upload limits
 
-const MAX_CSV_ROWS = getEnvVar('MAX_CSV_ROWS', '10000', false);
-const MAX_CSV_SIZE_MB = getEnvVar('MAX_CSV_SIZE_MB', '10', false);
+const MAX_CSV_ROWS = getEnvVar('MAX_CSV_ROWS', '100000', false);
+const MAX_CSV_SIZE_MB = getEnvVar('MAX_CSV_SIZE_MB', '100', false);
 
 // Email verification configuration
 

@@ -798,34 +798,24 @@ export interface RevokeApiKeyResponse {
 
 /**
  * CSV upload response interface
- * Returned after successfully uploading a CSV file
+ * Returned after successfully uploading a CSV file (now includes detection results)
  */
 export interface CSVUploadResponse {
     success: boolean;
     csv_upload_id: string;
     original_filename: string;
+    list_name: string | null;
     has_header: boolean;
     preview: Record<string, string>[];
     headers: string[];
     row_count: number;
     column_count: number;
     file_size: number;
-    upload_status: 'uploaded' | 'detecting' | 'ready' | 'submitted';
-}
-
-/**
- * Email column detection response interface
- * Returned after detecting the email column in CSV
- */
-export interface EmailDetectionResponse {
-    success: boolean;
-    csv_upload_id: string;
     detected_column: string;
     detected_column_index: number;
     confidence: number;
     column_scores: Record<string, number>;
-    upload_status: 'ready';
-    warning?: string;
+    upload_status: 'ready' | 'submitted';
 }
 
 /**
@@ -956,11 +946,11 @@ export interface HistoryResponse {
  */
 export const verificationApi = {
     /**
-     * Upload CSV file for verification
-     * Uploads file, parses structure, generates preview
+     * Upload CSV file and detect email column in one step
+     * Uploads file, parses structure, generates preview, and detects email column
      *
-     * @param {FormData} formData - FormData containing csvFile and hasHeader
-     * @returns {Promise<CSVUploadResponse>} Promise resolving to upload response
+     * @param {FormData} formData - FormData containing csvFile, list_name, and has_header
+     * @returns {Promise<CSVUploadResponse>} Promise resolving to upload and detection response
      * @throws {Error} If file is invalid or upload fails
      */
     async uploadCSV(formData: FormData): Promise<CSVUploadResponse> {
@@ -992,46 +982,6 @@ export const verificationApi = {
             const statusCode = (error as any)?.status;
             const validationErrors = (error as any)?.validationErrors;
             throw new Error(formatErrorMessage(message, statusCode, validationErrors));
-        }
-    },
-
-    /**
-     * Detect email column in uploaded CSV
-     * Analyzes CSV to find column containing emails
-     *
-     * @param {string} csvUploadId - CSV upload ID
-     * @param {string} listName - Name for the email list
-     * @param {boolean} hasHeader - Whether CSV has header row
-     * @returns {Promise<EmailDetectionResponse>} Promise resolving to detection results
-     * @throws {Error} If detection fails
-     */
-    async detectEmailColumn(csvUploadId: string, listName: string, hasHeader: boolean): Promise<EmailDetectionResponse> {
-        try {
-            const response = await axiosPost<{
-                success: boolean;
-                data: EmailDetectionResponse;
-            }>(
-                `${config.api.baseUrl}/api/verifier/csv/detect-email`,
-                {
-                    csv_upload_id: csvUploadId,
-                    list_name: listName,
-                    has_header: hasHeader
-                },
-                { headers: getAuthHeaders() }
-            );
-
-            if (!response.success || !response.data) {
-                const error = new Error(response.error instanceof Error ? response.error.message : response.error || 'Email detection failed');
-                (error as any).status = response.status;
-                throw error;
-            }
-
-            return response.data.data;
-
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Email detection failed';
-            const statusCode = (error as any)?.status;
-            throw new Error(formatErrorMessage(message, statusCode));
         }
     },
 
