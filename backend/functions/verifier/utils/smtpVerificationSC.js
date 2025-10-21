@@ -706,7 +706,7 @@ class SMTPVerificationSC {
 			await this.handleRcptTo(dataStr.trim(), smtpHost);
 
 			if (
-				this._email_verification_seq_index >= this._email_verification_seq.length - 1 &&
+				this._calculatedResult &&
 				!this._waiting_for_verification
 			) {
 				// complete
@@ -846,6 +846,7 @@ class SMTPVerificationSC {
 	 * @private
 	 */
 	async handleRcptTo(dataStr, smtpHost = '') {
+		console.log(`📨 GMAIL RESPONSE: ${dataStr}`);
 		this.logger.debug(`Received: RCPT block - ${dataStr}`);
 
 		// get the email being processed currently -> if index is even, get the next odd
@@ -1048,8 +1049,8 @@ class SMTPVerificationSC {
 					}
 
 					const command = `RCPT TO:<${nextEmail}>`;
-					// console.log(`📤 SENDING NEXT: ${command}`);
-					// this.logger.info(`📤 SENDING NEXT: ${command}`);
+					console.log(`📤 SENDING NEXT: ${command}`);
+					this.logger.info(`📤 SENDING NEXT: ${command}`);
 					this._client?.write(`${command}\r\n`);
 					this._waiting_for_verification = true;
 				} else if (this._email_verification_seq_index >= this._email_verification_seq.length) {
