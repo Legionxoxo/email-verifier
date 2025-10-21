@@ -706,7 +706,7 @@ class SMTPVerificationSC {
 			await this.handleRcptTo(dataStr.trim(), smtpHost);
 
 			if (
-				this._calculatedResult &&
+				this._email_verification_seq_index >= this._email_verification_seq.length - 1 &&
 				!this._waiting_for_verification
 			) {
 				// complete
@@ -814,8 +814,8 @@ class SMTPVerificationSC {
 				this.logger.info(`🔄 STAGE CHANGE: MAIL_FROM -> RCPT_TO`);
 				this._smtp_stage = SMTPStages.rcptTo;
 
-				// set catch all to true by default for the next stage
-				this.updateResults({ catch_all: true });
+				// FIX: Do NOT default all emails to catch_all: true here.
+				// (Removed: this.updateResults({ catch_all: true });)
 			}
 		}
 
@@ -849,18 +849,17 @@ class SMTPVerificationSC {
 		console.log(`📨 GMAIL RESPONSE: ${dataStr}`);
 		this.logger.debug(`Received: RCPT block - ${dataStr}`);
 
-		// get the email being processed currently -> if index is even, get the next odd
-		let emailIndex =
-				this._email_verification_seq_index % 2 === 0
-					? this._email_verification_seq_index + 1
-					: this._email_verification_seq_index,
-			emailBeingProcessed = this._email_verification_seq[emailIndex];
+		// FIX: correct attribution — use the CURRENT index element and track whether it's a probe
+		const currentIndex = this._email_verification_seq_index;
+		const emailBeingProcessed = this._email_verification_seq[currentIndex];
+		const isCatchAllProbe = currentIndex % 2 === 0; // even index = random/probe
+		const realEmail = isCatchAllProbe ? this._email_verification_seq[currentIndex + 1] : emailBeingProcessed;
 
 		console.log(
-			`📝 EMAIL PROCESSING: Index=${this._email_verification_seq_index}, EmailIndex=${emailIndex}, Email=${emailBeingProcessed}`
+			`📝 EMAIL PROCESSING: Index=${currentIndex}, Email=${emailBeingProcessed}, isProbe=${isCatchAllProbe}`
 		);
 		this.logger.info(
-			`📝 EMAIL PROCESSING: Index=${this._email_verification_seq_index}, EmailIndex=${emailIndex}, Email=${emailBeingProcessed}`
+			`📝 EMAIL PROCESSING: Index=${currentIndex}, Email=${emailBeingProcessed}, isProbe=${isCatchAllProbe}`
 		);
 
 		const err = parseSMTPError(dataStr); // Legacy error parsing for compatibility
@@ -873,47 +872,26 @@ class SMTPVerificationSC {
 			this.logger.debug(
 				`Greylisting detected for ${emailBeingProcessed}: ${greylistAnalysis.reason} (confidence: ${greylistAnalysis.confidence}%)`
 			);
-			this.updateResultForEmail(
-				{
-					greylisted: true,
-				},
-				emailBeingProcessed
-			);
-
-			// For high confidence greylisting, consider marking for retry
-			if (greylistAnalysis.confidence >= 75 && greylistAnalysis.shouldRetry) {
-				this.updateResultForEmail(
-					{
-						requires_recheck: true,
-					},
-					emailBeingProcessed
-				);
+			// If real email is being processed, mark it; if probe, do nothing to real’s flags
+			if (!isCatchAllProbe) {
+				this.updateResultForEmail({ greylisted: true }, emailBeingProcessed);
+				if (greylistAnalysis.confidence >= 75 && greylistAnalysis.shouldRetry) {
+					this.updateResultForEmail({ requires_recheck: true }, emailBeingProcessed);
+				}
 			}
 		} else if (greylistAnalysis.confidence > 0 && greylistAnalysis.confidence < 50) {
-			// Log uncertain cases for debugging
 			this.logger.debug(
 				`Uncertain greylisting for ${emailBeingProcessed}: ${greylistAnalysis.reason} (confidence: ${greylistAnalysis.confidence}%)`
 			);
 		}
 
-		// Process errors first to ensure proper precedence over success responses
+		// ERROR PATH (handle before success)
 		if (err || enhancedErr) {
-			// CRITICAL: Check for 5xx permanent failures (including 550 relay not permitted)
-			const is5xxError = dataStr.match(/^5\d{2}/);
+			const is5xxError = /^5\d{2}/.test(dataStr);
 			const isRelayError =
 				dataStr.toLowerCase().includes('relay not permitted') ||
 				dataStr.toLowerCase().includes('relay denied') ||
 				dataStr.toLowerCase().includes('relaying denied');
-
-			// Check if it's a "user not found" / "email doesn't exist" response (NOT an error)
-			const isUserNotFound =
-				dataStr.toLowerCase().includes('user not found') ||
-				dataStr.toLowerCase().includes('does not exist') ||
-				dataStr.toLowerCase().includes('no such user') ||
-				dataStr.toLowerCase().includes('mailbox not found') ||
-				dataStr.toLowerCase().includes('recipient not found') ||
-				dataStr.toLowerCase().includes('unknown user') ||
-				(dataStr.match(/^550/) && dataStr.match(/5\.1\.1/));  // 550 5.1.1 is standard "user not found"
 
 			// Track relay errors per domain
 			if (isRelayError) {
@@ -922,11 +900,42 @@ class SMTPVerificationSC {
 				relayInfo.count++;
 				relayInfo.lastAttempt = Date.now();
 				this._relayBlockedDomains.set(domain, relayInfo);
-
 				this.logger.warn(`Relay blocked for domain ${domain} (count: ${relayInfo.count})`);
 			}
 
-			// Handle errors with proper precedence - this runs before success handling
+			// FIX: If this is the PROBE, never write error onto the real email.
+			if (isCatchAllProbe) {
+				const { domain } = emailSplit(realEmail || emailBeingProcessed);
+
+				if (is5xxError) {
+					// Not catch-all domain
+					this.logger.debug(`Probe got 5xx → mark domain as NOT catch-all: ${domain}`);
+					// Cache domain-level not-catch-all
+					try {
+						await catchAllCache.cache(domain, false, 95, 1);
+					} catch (e) {
+						this.logger.warn(`Catch-all cache write (false) failed for ${domain}: ${e?.toString?.()}`);
+					}
+				}
+
+				// Advance to the REAL email RCPT immediately
+				this._email_verification_seq_index++; // move from probe to real
+				this._waiting_for_verification = false;
+
+				if (this._email_verification_seq_index < this._email_verification_seq.length && realEmail) {
+					const command = `RCPT TO:<${realEmail}>`;
+					console.log(`📤 SENDING NEXT: ${command} with email ${realEmail}`);
+					this._client?.write(`${command}\r\n`);
+					this._waiting_for_verification = true;
+				} else if (this._email_verification_seq_index >= this._email_verification_seq.length) {
+					this._calculatedResult = true;
+					console.log(`🏁 SEQUENCE COMPLETE: No more emails to verify`);
+				}
+
+				return; // CRITICAL: stop here, don't apply error to the real email
+			}
+
+			// From here, errors apply to REAL emails only
 			if (this._waiting_for_verification && !this._calculatedResult) {
 				// Enhanced error handling with context awareness
 				const errorToHandle = enhancedErr || err;
@@ -938,35 +947,20 @@ class SMTPVerificationSC {
 				if (is5xxError) {
 					this.logger.info(`Permanent 5xx error for ${emailBeingProcessed}: ${dataStr.trim()}`);
 
-					// Distinguish between "email doesn't exist" (not an error) and actual errors
-					if (isUserNotFound) {
-						// This is NOT an error - the email simply doesn't exist
-						this.updateResultForEmail(
-							{
-								deliverable: false,
-								catch_all: false,
-								done: true,
-								error: false,  // NOT an error, just doesn't exist
-								errorMsg: { details: '', message: '' },  // Clear error message
+					// Mark as undeliverable for 5xx errors
+					this.updateResultForEmail(
+						{
+							deliverable: false,
+							catch_all: false,
+							done: true,
+							error: true,
+							errorMsg: {
+								message: isRelayError ? 'Relay not permitted' : 'Permanent failure',
+								details: dataStr.trim(),
 							},
-							emailBeingProcessed
-						);
-					} else {
-						// This is an actual error (relay, blacklist, server issue, etc.)
-						this.updateResultForEmail(
-							{
-								deliverable: false,
-								catch_all: false,
-								done: true,
-								error: true,
-								errorMsg: {
-									message: isRelayError ? 'Relay not permitted' : 'Permanent failure',
-									details: dataStr.trim(),
-								},
-							},
-							emailBeingProcessed
-						);
-					}
+						},
+						emailBeingProcessed
+					);
 
 					// Don't retry 5xx errors
 					this._emailRetryCount.set(emailBeingProcessed, this._maxRetriesPerEmail + 1);
@@ -978,29 +972,19 @@ class SMTPVerificationSC {
 						this.logger.debug(
 							`Enhanced error analysis for ${emailBeingProcessed}: ${enhancedErr.errorType} (${enhancedErr.classification}, confidence: ${enhancedErr.confidence}%)`
 						);
-
 						// Handle enhanced error with context
-						this.handleErrorsForEmail(
-							enhancedErr.message,
-							emailBeingProcessed,
-							this._email_verification_seq_index === emailIndex
-						);
-
+						this.handleErrorsForEmail(enhancedErr.message, emailBeingProcessed, true);
 						// Mark for retry based on analysis
 						if (enhancedErr.shouldRetry && enhancedErr.confidence >= 70) {
 							this.updateResultForEmail({ requires_recheck: true }, emailBeingProcessed);
 						}
 					} else if (err) {
 						// Legacy error handling
-						this.handleErrorsForEmail(
-							err.message,
-							emailBeingProcessed,
-							this._email_verification_seq_index === emailIndex
-						);
+						this.handleErrorsForEmail(err.message, emailBeingProcessed, true);
 
 						if (
-							err.details.toLowerCase().includes('protocol error') ||
-							err.message.toLowerCase().includes('protocol error')
+							err.details?.toLowerCase?.().includes('protocol error') ||
+							err.message?.toLowerCase?.().includes('protocol error')
 						) {
 							this.updateResultForEmail({ requires_recheck: true }, emailBeingProcessed);
 						}
@@ -1021,45 +1005,21 @@ class SMTPVerificationSC {
 						emailBeingProcessed
 					);
 				}
-			} else if (!this._start_verification) {
-				// Handle errors before verification starts
-				this.handleErrorsForAll(err?.message || enhancedErr?.message || 'Unknown error');
-			}
 
-			// CRITICAL FIX: Always advance sequence after error handling
-			if (this._waiting_for_verification && !this._calculatedResult) {
+				// Advance sequence after handling real-email error
 				console.log(`🔄 ERROR HANDLING: Advancing sequence after error for ${emailBeingProcessed}`);
-
-				// For catch-all test failures (even index), clear error and reset state for actual email test
-				if (this._email_verification_seq_index % 2 === 0 && is5xxError) {
-					// This was a catch-all test (even index) with 5xx error
-					// Clear the error that was set during catch-all testing, as we need to test the actual email
-					this.updateResultForEmail({
-						catch_all: false,
-						error: false,  // Clear error from catch-all test
-						errorMsg: { details: '', message: '' },  // Clear error message
-						deliverable: false,  // Reset deliverable state
-						done: false  // Reset done state to allow actual email test
-					}, emailBeingProcessed);
-					console.log(
-						`🔄 CATCH-ALL TEST FAILED with 5xx: ${emailBeingProcessed} - cleared error, advancing to actual email`
-					);
-				}
-
-				// Advance to next email in sequence
 				this._email_verification_seq_index++;
 				this._waiting_for_verification = false;
 
-				// CRITICAL FIX: Immediately send next RCPT TO command after advancing sequence
-				if (
+				// Skip remaining emails from relay-blocked domains (circuit breaker)
+				while (
 					this._email_verification_seq_index < this._email_verification_seq.length &&
 					!this._calculatedResult
 				) {
 					const nextEmail = this._email_verification_seq[this._email_verification_seq_index];
-
-					// Circuit breaker: Skip remaining emails from relay-blocked domains
 					const { domain: nextDomain } = emailSplit(nextEmail);
 					const relayInfo = this._relayBlockedDomains.get(nextDomain);
+
 					if (relayInfo && relayInfo.count >= 2) {
 						this.logger.warn(`Skipping ${nextEmail} due to relay blocks on domain ${nextDomain}`);
 						this.updateResultForEmail(
@@ -1075,150 +1035,123 @@ class SMTPVerificationSC {
 							nextEmail
 						);
 						this._email_verification_seq_index++;
-						// Recursively advance to next non-blocked email
-						await this.handleRcptTo('250 Skipped', smtpHost);
-						return;
+						continue;
 					}
 
 					const command = `RCPT TO:<${nextEmail}>`;
-					console.log(`📤 SENDING NEXT: ${command}`);
-					this.logger.info(`📤 SENDING NEXT: ${command}`);
+					console.log(`📤 SENDING NEXT: ${command} with email ${nextEmail}`);
 					this._client?.write(`${command}\r\n`);
 					this._waiting_for_verification = true;
-				} else if (this._email_verification_seq_index >= this._email_verification_seq.length) {
-					// If we've reached the end of the sequence, mark as complete
+					break;
+				}
+
+				if (this._email_verification_seq_index >= this._email_verification_seq.length) {
 					this._calculatedResult = true;
 					console.log(`🏁 SEQUENCE COMPLETE: No more emails to verify`);
 				}
+
+				return;
+			} else if (!this._start_verification) {
+				// Handle errors before verification starts (unlikely here)
+				this.handleErrorsForAll(err?.message || enhancedErr?.message || 'Unknown error');
 			}
 		}
 
-		// Handle success responses only if no errors were detected
+		// SUCCESS PATH
 		if ((dataStr.startsWith('250') || this._start_verification) && !err && !enhancedErr) {
 			this._start_verification = true; // mark as true so future requests are handled here
 
-			// check the verification status of the last email
+			// If waiting for a verification response…
 			if (this._waiting_for_verification && !this._calculatedResult) {
-				// mark deliverable true if no error for the email -> make sure its for the email and not for the catch-all email
-				if (this._email_verification_seq_index === emailIndex) {
-					const resultObj = this.smtpReports.get(emailBeingProcessed);
-					if (!err) {
-						this.updateResultForEmail(
-							{ disabled: false, deliverable: true, greylisted: false, done: true },
-							emailBeingProcessed
-						);
+				// PROBE accepted (250) → mark domain as catch-all; skip real email if desired
+				if (isCatchAllProbe && dataStr.startsWith('250')) {
+					const { domain } = emailSplit(realEmail || emailBeingProcessed);
+					const confidence = 95;
+					try {
+						await catchAllCache.cache(domain, true, confidence, 1);
+					} catch (e) {
+						this.logger.warn(`Catch-all cache write (true) failed for ${domain}: ${e?.toString?.()}`);
 					}
-					// else if (
-					// 	(err.message === smtpErrors.ErrBlocked || err.message === smtpErrors.ErrNotAllowed) &&
-					// 	resultObj &&
-					// 	!resultObj.catch_all_blocked
-					// ) {
-					// 	// this for the situation where the catchall random email was not blocked due to blacklist but a valid one is blocked
-					// 	// -> This allows us to verify emails even though we are in blacklist (only works in some scenarios)
-					// 	// -> disabled is marked as false, since although we are blacklisted, we were able to verify the email
-					// 	this.updateResultForEmail(
-					// 		{ disabled: false, deliverable: true, greylisted: false, done: true },
-					// 		emailBeingProcessed
-					// 	);
-					// }
+
+					// POLICY: skip the real email if domain is catch-all (keeps behavior) but
+					// FIX: do NOT stamp catch_all:true onto the real email’s report.
+					this._email_verification_seq_index += 2; // skip over the real email test
+					this._waiting_for_verification = false;
+
+					if (this._email_verification_seq_index > this._email_verification_seq.length - 1) {
+						this._calculatedResult = true;
+					}
 				}
 
-				// increament to check the next email in the cycle
-				if (this._email_verification_seq_index < this._email_verification_seq.length - 1) {
-					// check if its a catch-all
-					const { domain } = emailSplit(emailBeingProcessed);
-					const resultObj = this.smtpReports.get(emailBeingProcessed);
-					if (resultObj) {
-						if (resultObj.catch_all) {
-							// check if the email is still catch-all (catch-all is the default assumption, that is remove if an error is found for a random string)
-							// update the result for the email
-							this.updateResultForEmail({ catch_all: true, done: true }, emailBeingProcessed);
+				// REAL email accepted (250) → mark deliverable and CLEAR any stale error flags
+				if (!isCatchAllProbe && this._email_verification_seq_index === currentIndex) {
+					this.updateResultForEmail(
+						{
+							disabled: false,
+							deliverable: true,
+							greylisted: false,
+							done: true,
+							// FIX: clear stale probe error
+							error: false,
+							errorMsg: { message: '', details: '' },
+						},
+						emailBeingProcessed
+					);
 
-							// save the data for the domain to the cache with confidence scoring
-							const confidence = resultObj.greylisted ? 75 : 95; // Lower confidence if greylisted
-							await catchAllCache.cache(domain, true, confidence, 1);
-
-							this._email_verification_seq_index += 2; // skipping the email since it is catch-all and we don't need to check again
-						} else {
-							// save the data for the domain to the cache with high confidence for non-catch-all
-							const confidence = resultObj.greylisted ? 80 : 95; // Lower confidence if greylisted
-							await catchAllCache.cache(domain, false, confidence, 1);
-
-							this._email_verification_seq_index++;
-						}
-					}
-				} else this._calculatedResult = true;
-
-				// mark waiting for verification to be false
-				this._waiting_for_verification = false;
+					// Advance to next sequence entry
+					this._email_verification_seq_index++;
+					this._waiting_for_verification = false;
+				}
 			}
 
-			// if index exceeds the length of array - 1, mark as complete
+			// If index exceeds the length of array - 1, mark as complete
 			if (this._email_verification_seq_index > this._email_verification_seq.length - 1) {
 				this._calculatedResult = true;
 				return;
 			}
 
-			/////////////////////////////////////////////////////////////////////////////////////////
-			// check if the domain exists in cache -> if yes check for catchall and skip accordingly
-			// -> check only when the catch-all random email is being checked in the email_verification_seq
-			while (this._email_verification_seq_index % 2 === 0) {
-				// 👆 while loop exists since, the next index it skips to may also be a catchall and hence cache needs to be checked
-				// get the email being processed currently -> if index is even, get the next odd
-				// ⚠️ This is not a duplicate code -> the indexes have been manipulated and need to be recalculated
-				let emailIndex =
-						this._email_verification_seq_index % 2 === 0
-							? this._email_verification_seq_index + 1
-							: this._email_verification_seq_index,
-					emailBeingProcessed = this._email_verification_seq[emailIndex];
+			// Check cached catch-all for domains when landing on a PROBE position
+			while (this._email_verification_seq_index % 2 === 0 && !this._calculatedResult) {
+				const idx = this._email_verification_seq_index;
+				const nextRealEmail = this._email_verification_seq[idx + 1];
+				if (!nextRealEmail) break;
 
-				// check for cache
-				const { domain } = emailSplit(emailBeingProcessed);
-				const res = await catchAllCache.check(domain);
+				const { domain } = emailSplit(nextRealEmail);
+				const cached = await catchAllCache.check(domain);
 
-				// ⚠️ if res === null, then the domain doesn't exist in cache -> do nothing in that case
-				if (res === true) {
-					// the email is a catch-all -> update the result for email and move the index
-					this.updateResultForEmail({ catch_all: true, done: true }, emailBeingProcessed);
+				if (cached === true) {
+					// Domain is catch-all → skip the real email test (but don’t write catch_all:true into its report)
+					this.logger.debug(`Log: Catch all from cache. Domain -> ${domain} Email sequence index -> ${idx}`);
+					this._email_verification_seq_index += 2;
+				} else if (cached === false) {
+					// Not catch-all → skip the probe and go directly to real email
 					this.logger.debug(
-						`Log: Catch all from cache. Domain -> ${domain} emailBeingProcessed -> ${emailBeingProcessed} Email sequence index -> ${this._email_verification_seq_index}`
+						`Log: Not Catch all from cache. Domain -> ${domain} Email sequence index -> ${idx}`
 					);
-					this._email_verification_seq_index += 2; // since we are skipping the legit email as well as it is a catch-all from cache
-				} else if (res === false) {
-					// the email is not catch-all -> can skip the catch-all check
-					this.logger.debug(
-						`Log: Not Catch all from cache. Domain -> ${domain} emailBeingProcessed -> ${emailBeingProcessed} Email sequence index -> ${this._email_verification_seq_index}`
-					);
-					this.updateResultForEmail({ catch_all: false }, emailBeingProcessed);
-					this._email_verification_seq_index++; // skipping the catch-all check
+					this._email_verification_seq_index++; // move to real email
+				} else {
+					// No cache, break to actually probe
+					break;
 				}
 
-				// if index exceeds the length of array - 1, mark as complete
 				if (this._email_verification_seq_index > this._email_verification_seq.length - 1) {
 					this._calculatedResult = true;
 					break;
 				}
-
-				if (res === null) break;
 			}
-			/////////////////////////////////////////////////////////////////////////////////////////
 
-			// send email in the sequence to perform a verification check
+			// Send next RCPT if sequence remains
 			if (this._email_verification_seq_index < this._email_verification_seq.length && !this._calculatedResult) {
-				// send email request
-				const command = `RCPT TO:<${this._email_verification_seq[this._email_verification_seq_index]}>`;
-				// console.log(`📤 SENDING: ${command}`);
-				// this.logger.info(`📤 SENDING: ${command}`);
-				this._client?.write(`${command}\r\n`); // send email for verification
-
-				if (!this._waiting_for_verification) this._waiting_for_verification = true; // mark to true so we wait for verification next
+				const nextTarget = this._email_verification_seq[this._email_verification_seq_index];
+				const command = `RCPT TO:<${nextTarget}>`;
+				this._client?.write(`${command}\r\n`);
+				if (!this._waiting_for_verification) this._waiting_for_verification = true;
 			}
 		}
 
-		// Edge case - handle unexpected responses that are neither success nor recognized errors
+		// Edge case - unexpected responses
 		if (!dataStr.startsWith('250') && !err && !enhancedErr && !greylisted) {
 			this.logger.warn(`Unexpected SMTP response: ${dataStr}`);
-			// Handle all other cases
 			this.updateResults({
 				error: true,
 				errorMsg: {
@@ -1270,12 +1203,10 @@ class SMTPVerificationSC {
 	handleErrorsForEmail(errMsg, email, not_catchall_email) {
 		switch (errMsg) {
 			case smtpErrors.ErrFullInbox: {
-				// This can only be triggered if the catch_all is false and if triggered for rand email, then catch-all true is correct
 				this.updateResultForEmail({ full_inbox: true, done: true }, email);
 				break;
 			}
 			case smtpErrors.ErrNotAllowed: {
-				// since disabled doesn't necessarily means catch-all
 				this.updateResultForEmail({ disabled: true, catch_all: false, done: true }, email);
 				break;
 			}
@@ -1284,7 +1215,6 @@ class SMTPVerificationSC {
 				break;
 			}
 			case smtpErrors.ErrBlocked: {
-				// The SMTP server could also be blocked
 				if (!not_catchall_email)
 					this.updateResultForEmail(
 						{
@@ -1449,7 +1379,6 @@ class SMTPVerificationSC {
 
 			await new Promise(res => {
 				// reconnect only if it was not a self disconnect AND if there is no TLS connection
-				// if (!this._self_disconnect && !this._secureClient) {
 				if (!this._self_disconnect) {
 					// connect the client to the SMTP server
 					if (this._reconnections < this._max_reconnections) {
@@ -1501,10 +1430,7 @@ class SMTPVerificationSC {
 	async disconnect(ignoreTLS = false) {
 		try {
 			const command = 'QUIT';
-			// console.log(`📤 SENDING: ${command}`);
-			// this.logger.info(`📤 SENDING: ${command}`);
-			if (this._client) this._client?.write(`${command}\r\n`); // initiate the client disconnection + wait after it
-			// if (this._secureClient) this._secureClient?.write('QUIT\r\n'); // initiate the client disconnection + wait after it
+			if (this._client) this._client?.write(`${command}\r\n`);
 			this._self_disconnect = true; // Marks that the disconnection was initiated by us
 
 			// wait for sometime to check if the client disconnected | if the client already disconnected
@@ -1516,7 +1442,6 @@ class SMTPVerificationSC {
 				if (!this._clientConnected) break;
 
 				if (diff > this._timeout - 500) {
-					// 500 ms before timeout
 					this.logger.debug(`FORCE QUITING CONNECTION!`);
 					break; // times up!
 				}
@@ -1525,10 +1450,7 @@ class SMTPVerificationSC {
 			}
 
 			if (this._clientConnected) {
-				// this._secureClient?.end();
 				this._client?.end();
-				// close yourself
-				// this._secureClient?.destroy();
 				this._client?.destroy();
 			}
 		} catch (error) {
