@@ -9,8 +9,9 @@ services:
     container_name: email-verifier-app
 
     # Port mapping: host:container
+    # Only expose to localhost - nginx will proxy to it
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
 
     # Load environment variables from backend/.env file
     env_file:
