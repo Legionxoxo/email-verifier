@@ -905,6 +905,16 @@ class SMTPVerificationSC {
 				dataStr.toLowerCase().includes('relay denied') ||
 				dataStr.toLowerCase().includes('relaying denied');
 
+			// Check if it's a "user not found" / "email doesn't exist" response (NOT an error)
+			const isUserNotFound =
+				dataStr.toLowerCase().includes('user not found') ||
+				dataStr.toLowerCase().includes('does not exist') ||
+				dataStr.toLowerCase().includes('no such user') ||
+				dataStr.toLowerCase().includes('mailbox not found') ||
+				dataStr.toLowerCase().includes('recipient not found') ||
+				dataStr.toLowerCase().includes('unknown user') ||
+				(dataStr.match(/^550/) && dataStr.match(/5\.1\.1/));  // 550 5.1.1 is standard "user not found"
+
 			// Track relay errors per domain
 			if (isRelayError) {
 				const { domain } = emailSplit(emailBeingProcessed);
@@ -928,20 +938,35 @@ class SMTPVerificationSC {
 				if (is5xxError) {
 					this.logger.info(`Permanent 5xx error for ${emailBeingProcessed}: ${dataStr.trim()}`);
 
-					// Mark as undeliverable for 5xx errors
-					this.updateResultForEmail(
-						{
-							deliverable: false,
-							catch_all: false,
-							done: true,
-							error: true,
-							errorMsg: {
-								message: isRelayError ? 'Relay not permitted' : 'Permanent failure',
-								details: dataStr.trim(),
+					// Distinguish between "email doesn't exist" (not an error) and actual errors
+					if (isUserNotFound) {
+						// This is NOT an error - the email simply doesn't exist
+						this.updateResultForEmail(
+							{
+								deliverable: false,
+								catch_all: false,
+								done: true,
+								error: false,  // NOT an error, just doesn't exist
+								errorMsg: { details: '', message: '' },  // Clear error message
 							},
-						},
-						emailBeingProcessed
-					);
+							emailBeingProcessed
+						);
+					} else {
+						// This is an actual error (relay, blacklist, server issue, etc.)
+						this.updateResultForEmail(
+							{
+								deliverable: false,
+								catch_all: false,
+								done: true,
+								error: true,
+								errorMsg: {
+									message: isRelayError ? 'Relay not permitted' : 'Permanent failure',
+									details: dataStr.trim(),
+								},
+							},
+							emailBeingProcessed
+						);
+					}
 
 					// Don't retry 5xx errors
 					this._emailRetryCount.set(emailBeingProcessed, this._maxRetriesPerEmail + 1);
@@ -1005,12 +1030,19 @@ class SMTPVerificationSC {
 			if (this._waiting_for_verification && !this._calculatedResult) {
 				console.log(`🔄 ERROR HANDLING: Advancing sequence after error for ${emailBeingProcessed}`);
 
-				// For catch-all test failures (even index), only mark catch-all false if 5xx error
+				// For catch-all test failures (even index), clear error and reset state for actual email test
 				if (this._email_verification_seq_index % 2 === 0 && is5xxError) {
 					// This was a catch-all test (even index) with 5xx error
-					this.updateResultForEmail({ catch_all: false }, emailBeingProcessed);
+					// Clear the error that was set during catch-all testing, as we need to test the actual email
+					this.updateResultForEmail({
+						catch_all: false,
+						error: false,  // Clear error from catch-all test
+						errorMsg: { details: '', message: '' },  // Clear error message
+						deliverable: false,  // Reset deliverable state
+						done: false  // Reset done state to allow actual email test
+					}, emailBeingProcessed);
 					console.log(
-						`🔄 CATCH-ALL TEST FAILED with 5xx: ${emailBeingProcessed} - advancing to actual email`
+						`🔄 CATCH-ALL TEST FAILED with 5xx: ${emailBeingProcessed} - cleared error, advancing to actual email`
 					);
 				}
 
