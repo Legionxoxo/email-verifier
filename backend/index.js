@@ -4,6 +4,10 @@
  */
 
 require('dotenv').config();
+// Initialize logging and verification workers
+require('./functions/logging/logger');
+require('./functions/staging/queue');
+require('./functions/verifier/controller');
 const express = require('express');
 const path = require('path');
 const { validateEnvironment, PORT } = require('./data/env');
