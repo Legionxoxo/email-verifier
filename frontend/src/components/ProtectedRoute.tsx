@@ -1,18 +1,42 @@
 /**
  * Protected route component for authentication-required pages
  * Redirects unauthenticated users to login page
+ * Simple version without AuthContext
  */
 
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../hooks';
-import { LoadingSpinner } from './ui';
+import { config } from '../data/env';
+
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
     requireAuth?: boolean;
     redirectTo?: string;
 }
+
+
+/**
+ * Check if user is authenticated by checking localStorage
+ * @returns boolean indicating if user is authenticated
+ */
+function isAuthenticated(): boolean {
+    try {
+        const userStr = localStorage.getItem(config.auth.userStorageKey);
+        if (!userStr) {
+            return false;
+        }
+
+        const user = JSON.parse(userStr);
+        return !!user && !!user.email;
+    } catch (error) {
+        console.error('Auth check error:', error);
+        return false;
+    } finally {
+        // Debug logging omitted for production
+    }
+}
+
 
 /**
  * Protected route wrapper component
@@ -27,58 +51,51 @@ export function ProtectedRoute({
     redirectTo = '/login',
 }: ProtectedRouteProps) {
     try {
-        const { isAuthenticated, isLoading } = useAuth();
         const location = useLocation();
+        const authenticated = isAuthenticated();
 
-        // Show loading while checking auth status
-        if (isLoading) {
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                    <div className="text-center space-y-4">
-                        <LoadingSpinner size="lg" />
-                        <p className="text-sm text-gray-600">Loading...</p>
-                    </div>
-                </div>
-            );
-        }
 
         // If auth is required and user is not authenticated, redirect to login
-        if (requireAuth && !isAuthenticated) {
+        if (requireAuth && !authenticated) {
             return (
-                <Navigate 
-                    to={redirectTo} 
+                <Navigate
+                    to={redirectTo}
                     state={{ from: location.pathname }}
                     replace
                 />
             );
         }
 
+
         // If auth is not required and user is authenticated, redirect to dashboard
-        if (!requireAuth && isAuthenticated) {
-            const from = (location.state as any)?.from || '/dashboard';
+        if (!requireAuth && authenticated) {
+            const from = (location.state as Record<string, string>)?.from || '/dashboard';
             return (
-                <Navigate 
-                    to={from} 
-                    replace 
+                <Navigate
+                    to={from}
+                    replace
                 />
             );
         }
 
+
         // Render children if conditions are met
         return <>{children}</>;
-
     } catch (error) {
         console.error('ProtectedRoute error:', error);
-        
+
         // Fallback to login redirect on error
         return (
-            <Navigate 
-                to="/login" 
-                replace 
+            <Navigate
+                to="/login"
+                replace
             />
         );
+    } finally {
+        // Debug logging omitted for production
     }
 }
+
 
 /**
  * Public route wrapper - redirects authenticated users to dashboard
@@ -95,5 +112,7 @@ export function PublicRoute({ children }: { children: React.ReactNode }) {
     } catch (error) {
         console.error('PublicRoute error:', error);
         return <>{children}</>;
+    } finally {
+        // Debug logging omitted for production
     }
 }

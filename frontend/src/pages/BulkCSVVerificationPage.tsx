@@ -12,7 +12,6 @@ import { DashboardLayout } from '../components/layout';
 import { BulkVerifierStepTwo } from '../components/verifier/BulkVerifierStepTwo';
 import { Button } from '../components/ui/Button';
 import { verificationApi } from '../lib/api';
-import { useAuth } from '../hooks';
 import type { CSVFullDataResult } from '../lib/csvParser';
 
 
@@ -34,22 +33,9 @@ interface StoredCSVData {
  */
 export function BulkCSVVerificationPage() {
     const navigate = useNavigate();
-    const { user, logout } = useAuth();
     const [isVerifying, setIsVerifying] = useState(false);
     const [csvData, setCsvData] = useState<StoredCSVData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-
-
-    // Handle logout
-    const handleLogout = async () => {
-        try {
-            await logout();
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            console.debug('Logout handler completed');
-        }
-    };
 
 
     // Load CSV data from localStorage on mount
@@ -152,10 +138,7 @@ export function BulkCSVVerificationPage() {
 
 
     return (
-        <DashboardLayout
-            user={user || undefined}
-            onLogout={handleLogout}
-        >
+        <DashboardLayout>
             <div className="px-4 sm:px-6 lg:px-8 py-12">
                 <div className="w-full max-w-5xl mx-auto">
                     {isLoading ? (

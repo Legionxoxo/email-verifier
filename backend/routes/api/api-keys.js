@@ -13,15 +13,15 @@ const { handleRevokeApiKey } = require('../../functions/route_fns/api-keys/revok
 
 
 // Import authentication middleware
-const { authenticate } = require('../../functions/middleware/auth');
+const { allowAll } = require('../../functions/middleware/simpleAuth');
 
 
 // Create Express router instance
 const router = express.Router();
 
 
-// All API key routes require authentication
-router.use(authenticate);
+// All API key routes allow all access (simple auth - single user)
+router.use(allowAll);
 
 
 /**

@@ -67,14 +67,8 @@ function getPeriodTimestampRange(period) {
  */
 async function getHistory(req, res) {
 	try {
-		const user_id = req.user?.id;
-
-		if (!user_id) {
-			return res.status(401).json({
-				success: false,
-				message: 'Authentication required',
-			});
-		}
+		// For simple auth, use a default user_id of 1 if no user is authenticated
+		const user_id = req.user?.id || 1;
 
 		const query = /** @type {HistoryQueryParams} */ (req.query);
 

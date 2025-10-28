@@ -5,4 +5,3 @@
 
 export { useApi } from './useApi';
 export { useLocalStorage } from './useLocalStorage';
-export { useAuth } from '../contexts/AuthContext';

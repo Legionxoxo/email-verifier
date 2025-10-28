@@ -12,9 +12,7 @@ import { Button } from '../components/ui/Button';
 import { ResultAnalysis } from '../components/results/ResultAnalysis';
 import { ResultsList } from '../components/results/ResultsList';
 import { Skeleton } from '../components/ui/Skeleton';
-import { useAuth } from '../hooks';
 import { verificationApi } from '../lib/api';
-import type { User } from '../contexts/AuthContext';
 
 
 // ============================================================
@@ -40,8 +38,6 @@ export interface EmailVerificationResult {
 interface VerificationResultsPageProps {
     results?: EmailVerificationResult[];
     onBack?: () => void;
-    user?: User;
-    onLogout?: () => Promise<void>;
 }
 
 
@@ -53,12 +49,9 @@ interface VerificationResultsPageProps {
 export function VerificationResultsPage({
     results: propsResults,
     onBack: propsOnBack,
-    user: propsUser,
-    onLogout: propsOnLogout
 }: VerificationResultsPageProps = {}) {
     const navigate = useNavigate();
     const { verificationRequestId } = useParams<{ verificationRequestId: string }>();
-    const { user: authUser, logout: authLogout } = useAuth();
 
     // State for fetched results
     const [results, setResults] = useState<EmailVerificationResult[]>(propsResults || []);
@@ -80,10 +73,6 @@ export function VerificationResultsPage({
     // Ref for intersection observer (using callback ref for better timing)
     const observerTarget = useRef<HTMLDivElement>(null);
     const [observerElement, setObserverElement] = useState<HTMLDivElement | null>(null);
-
-    // Use props if provided (component mode), otherwise use hooks (route mode)
-    const user = propsUser || authUser;
-    const onLogout = propsOnLogout || authLogout;
 
 
     // Fetch initial results from API if not provided via props
@@ -219,18 +208,6 @@ export function VerificationResultsPage({
     };
 
 
-    // Handle logout
-    const handleLogout = async () => {
-        try {
-            if (onLogout) {
-                await onLogout();
-            }
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            console.debug('Logout handler completed');
-        }
-    };
 
 
     try {
@@ -238,8 +215,8 @@ export function VerificationResultsPage({
         if (loading) {
             return (
                 <DashboardLayout
-                    user={user || undefined}
-                    onLogout={handleLogout}
+                    
+                    
                 >
                     <div className="px-4 sm:px-6 lg:px-8 py-8">
                         {/* Header skeleton */}
@@ -318,8 +295,8 @@ export function VerificationResultsPage({
         if (error) {
             return (
                 <DashboardLayout
-                    user={user || undefined}
-                    onLogout={handleLogout}
+                    
+                    
                 >
                     <div className="flex items-center justify-center min-h-[400px]">
                         <div className="text-center space-y-4 p-8">
@@ -362,8 +339,8 @@ export function VerificationResultsPage({
 
         return (
             <DashboardLayout
-                user={user || undefined}
-                onLogout={handleLogout}
+                
+                
             >
                 <div className="px-4 sm:px-6 lg:px-8 py-8">
                     {/* Header with back button */}
@@ -435,8 +412,8 @@ export function VerificationResultsPage({
 
         return (
             <DashboardLayout
-                user={user || undefined}
-                onLogout={handleLogout}
+                
+                
             >
                 <div className="flex items-center justify-center min-h-[400px]">
                     <div className="text-center space-y-4 p-8">

@@ -7,7 +7,26 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home, ArrowLeft, Search } from 'lucide-react';
 import { Button } from '../components/ui';
-import { useAuth } from '../hooks';
+import { config } from '../data/env';
+
+
+/**
+ * Check if user is authenticated
+ * @returns boolean
+ */
+function isAuthenticated(): boolean {
+    try {
+        const userStr = localStorage.getItem(config.auth.userStorageKey);
+        if (!userStr) return false;
+        const user = JSON.parse(userStr);
+        return !!user && !!user.email;
+    } catch (error) {
+        return false;
+    } finally {
+        // Debug logging omitted for production
+    }
+}
+
 
 /**
  * 404 Not Found page
@@ -16,13 +35,16 @@ import { useAuth } from '../hooks';
 export function NotFoundPage() {
     try {
         const navigate = useNavigate();
-        const { isAuthenticated } = useAuth();
+        const authenticated = isAuthenticated();
+
 
         const handleGoHome = () => {
             try {
-                navigate(isAuthenticated ? '/dashboard' : '/', { replace: true });
+                navigate(authenticated ? '/dashboard' : '/', { replace: true });
             } catch (error) {
                 console.error('Navigate home error:', error);
+            } finally {
+                // Debug logging omitted for production
             }
         };
 
@@ -108,9 +130,9 @@ export function NotFoundPage() {
                                     className="flex items-center justify-center"
                                 >
                                     <Home className="h-4 w-4 mr-2" />
-                                    {isAuthenticated ? 'Go to Dashboard' : 'Go Home'}
+                                    {authenticated ? 'Go to Dashboard' : 'Go Home'}
                                 </Button>
-                                
+
                                 <Button
                                     onClick={handleGoBack}
                                     variant="outline"
@@ -120,8 +142,8 @@ export function NotFoundPage() {
                                     <ArrowLeft className="h-4 w-4 mr-2" />
                                     Go Back
                                 </Button>
-                                
-                                {!isAuthenticated && (
+
+                                {!authenticated && (
                                     <Button
                                         onClick={handleGoToLogin}
                                         variant="ghost"

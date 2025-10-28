@@ -186,14 +186,8 @@ async function uploadCSV(req, res) {
 		const csvUploadId = req.csvUploadId;
 		const filePath = req.file?.path;
 		const originalFilename = req.originalFilename;
-		const user_id = req.user?.id;
-
-		if (!user_id) {
-			return res.status(401).json({
-				success: false,
-				message: 'Authentication required',
-			});
-		}
+		// For simple auth, use a default user_id of 1 if no user is authenticated
+		const user_id = req.user?.id || 1;
 
 		// Get has_header and list_name from request body (now required)
 		const hasHeader = req.body.has_header !== undefined
@@ -478,7 +472,8 @@ async function uploadCSV(req, res) {
 async function submitCSVVerification(req, res) {
 	try {
 		const { csv_upload_id, email_column_index } = req.body;
-		const user_id = req.user?.id;
+		// For simple auth, use a default user_id of 1 if no user is authenticated
+		const user_id = req.user?.id || 1;
 
 		if (!csv_upload_id || email_column_index === undefined) {
 			return res.status(400).json({
@@ -632,7 +627,8 @@ async function submitCSVVerification(req, res) {
 async function downloadCSVResults(req, res) {
 	try {
 		const { csv_upload_id } = req.params;
-		const user_id = req.user?.id;
+		// For simple auth, use a default user_id of 1 if no user is authenticated
+		const user_id = req.user?.id || 1;
 
 		if (!csv_upload_id) {
 			return res.status(400).json({

@@ -7,7 +7,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { DashboardLayout } from '../components/layout';
 import { SingleVerifier, BulkVerifier } from '../components/verifier';
-import { useAuth } from '../hooks';
 
 
 /**
@@ -16,30 +15,12 @@ import { useAuth } from '../hooks';
  */
 export function DashboardPage() {
     try {
-        const { user, logout } = useAuth();
         const [showSingleVerifier, setShowSingleVerifier] = React.useState(true);
         const [isSingleVerifying, setIsSingleVerifying] = React.useState(false);
 
 
-        // Handle logout
-        const handleLogout = async () => {
-            try {
-                await logout();
-            } catch (error) {
-                console.error('Logout error:', error);
-            } finally {
-                console.debug('Logout handler completed');
-            }
-        };
-
-
-
-
         return (
-            <DashboardLayout
-                user={user || undefined}
-                onLogout={handleLogout}
-            >
+            <DashboardLayout>
                 {/* Main Content - Scrollable */}
                 <div className="px-4 sm:px-6 lg:px-8 py-12">
                     <div className="w-full max-w-7xl space-y-8 mx-auto ">

@@ -44,9 +44,6 @@ function initializeDatabase() {
 		// Create tables
 		createTables(db);
 
-		// Run schema migrations AFTER all tables are created
-		runSchemaMigrations(db);
-
 		console.log('Database initialized successfully at:', dbPath);
 		return db;
 	} catch (error) {
@@ -59,106 +56,34 @@ function initializeDatabase() {
 }
 
 /**
- * Run schema migrations for existing tables
+ * Ensure admin user exists in database
+ * Creates user with id=1 if it doesn't exist (for foreign key relationships)
  * @param {import('better-sqlite3').Database} db - SQLite database instance
  * @returns {void}
  */
-function runSchemaMigrations(db) {
+function ensureAdminUserExists(db) {
 	try {
-		// Add email_change_pending token type support
-		migrateAuthTokensSchema(db);
+		// Check if user with id=1 exists
+		const checkUser = db.prepare('SELECT id FROM users WHERE id = 1');
+		const userExists = checkUser.get();
 
-		console.log('✅ Schema migrations completed successfully');
+		if (!userExists) {
+			// Insert admin user with id=1
+			const insertUser = db.prepare('INSERT INTO users (id) VALUES (1)');
+			insertUser.run();
+			console.log('✅ Admin user (id=1) created successfully');
+		} else {
+			console.log('✅ Admin user (id=1) already exists');
+		}
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error('❌ Schema migration failed:', errorMessage);
+		console.error('❌ Failed to ensure admin user exists:', errorMessage);
 		throw error;
 	} finally {
-		console.debug('Schema migration process completed');
+		console.debug('Admin user check completed');
 	}
 }
 
-/**
- * Migrate auth_tokens table to support email_change_pending token type
- * @param {import('better-sqlite3').Database} db - SQLite database instance
- * @returns {void}
- */
-function migrateAuthTokensSchema(db) {
-	try {
-		// Check if auth_tokens table exists
-		const checkTable = db.prepare(`
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='auth_tokens'
-        `);
-		const tableExists = checkTable.get();
-
-		if (!tableExists) {
-			console.log('📝 auth_tokens table does not exist yet, will be created with email_change_pending support');
-			return;
-		}
-
-		// Check current schema constraints
-		const tableInfo = /** @type {{sql?: string} | undefined} */ (
-			db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='auth_tokens'").get()
-		);
-		const tableSQL = tableInfo?.sql || '';
-
-		// Check if email_change_pending is already supported
-		if (tableSQL.includes('email_change_pending')) {
-			console.log('✅ auth_tokens table already supports email_change_pending token type');
-			return;
-		}
-
-		console.log('🔄 Migrating auth_tokens table to support email_change_pending token type...');
-
-		// SQLite doesn't support modifying CHECK constraints, so we need to recreate the table
-		const transaction = db.transaction(() => {
-			// Create new table with updated schema
-			db.prepare(
-				`
-                CREATE TABLE auth_tokens_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    token TEXT NOT NULL,
-                    token_type TEXT NOT NULL CHECK (token_type IN ('otp', 'password_reset', 'refresh', 'email_change_pending')),
-                    expires_at DATETIME NOT NULL,
-                    is_used BOOLEAN DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-                )
-            `
-			).run();
-
-			// Copy data from old table
-			db.prepare(
-				`
-                INSERT INTO auth_tokens_new (id, user_id, token, token_type, expires_at, is_used, created_at)
-                SELECT id, user_id, token, token_type, expires_at, is_used, created_at
-                FROM auth_tokens
-            `
-			).run();
-
-			// Drop old table
-			db.prepare('DROP TABLE auth_tokens').run();
-
-			// Rename new table
-			db.prepare('ALTER TABLE auth_tokens_new RENAME TO auth_tokens').run();
-
-			// Recreate indexes
-			db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_tokens_token ON auth_tokens (token)').run();
-			db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_tokens_type ON auth_tokens (token_type)').run();
-		});
-
-		transaction();
-		console.log('✅ auth_tokens table migration completed successfully');
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error('❌ auth_tokens migration failed:', errorMessage);
-		throw error;
-	} finally {
-		console.debug('auth_tokens migration process completed');
-	}
-}
 
 /**
  * Create database tables if they don't exist
@@ -167,32 +92,10 @@ function migrateAuthTokensSchema(db) {
  */
 function createTables(db) {
 	try {
-		// Users table
+		// Users table - minimal schema for simple auth (just id for foreign keys)
 		const createUsersTable = db.prepare(`
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                first_name TEXT NOT NULL,
-                last_name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                is_verified BOOLEAN DEFAULT 0,
-                api_key_limit INTEGER DEFAULT 10,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-		// Auth tokens table for OTP and password reset
-		const createAuthTokensTable = db.prepare(`
-            CREATE TABLE IF NOT EXISTS auth_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                token TEXT NOT NULL,
-                token_type TEXT NOT NULL CHECK (token_type IN ('otp', 'password_reset', 'refresh', 'email_change_pending')),
-                expires_at DATETIME NOT NULL,
-                is_used BOOLEAN DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                id INTEGER PRIMARY KEY AUTOINCREMENT
             )
         `);
 
@@ -258,17 +161,14 @@ function createTables(db) {
 
 		// Execute table creation
 		createUsersTable.run();
-		createAuthTokensTable.run();
 		createVerificationRequestsTable.run();
 		createCsvUploadsTable.run();
 		createApiKeysTable.run();
 
+		// Ensure admin user exists (user_id = 1 for all foreign keys)
+		ensureAdminUserExists(db);
+
 		// Create indexes for better performance
-		const createEmailIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)');
-		const createTokenIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_tokens_token ON auth_tokens (token)');
-		const createTokenTypeIndex = db.prepare(
-			'CREATE INDEX IF NOT EXISTS idx_auth_tokens_type ON auth_tokens (token_type)'
-		);
 		const createVerificationUserDateIndex = db.prepare(
 			'CREATE INDEX IF NOT EXISTS idx_verification_user_date ON verification_requests(user_id, created_at DESC)'
 		);
@@ -289,9 +189,6 @@ function createTables(db) {
 		const createApiKeysHashIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash)');
 		const createApiKeysRevokedIndex = db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_revoked ON api_keys(user_id, is_revoked)');
 
-		createEmailIndex.run();
-		createTokenIndex.run();
-		createTokenTypeIndex.run();
 		createVerificationUserDateIndex.run();
 		createVerificationUserTypeIndex.run();
 		createVerificationStatusIndex.run();
@@ -351,9 +248,6 @@ function createTestDatabase(testDbPath) {
 
 		// Create tables
 		createTables(db);
-
-		// Run schema migrations AFTER all tables are created
-		runSchemaMigrations(db);
 
 		console.log('Test database initialized successfully at:', testDbPath);
 		return db;

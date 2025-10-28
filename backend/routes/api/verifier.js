@@ -12,8 +12,7 @@
  */
 
 const express = require('express');
-const { authenticate } = require('../../functions/middleware/auth');
-const { authenticateEither } = require('../../functions/middleware/authenticateEither');
+const { allowAll } = require('../../functions/middleware/simpleAuth');
 const { authenticateApiKey } = require('../../functions/middleware/authenticateApiKey');
 const { verifySingleEmail } = require('../../functions/route_fns/verify/singleEmailVerification');
 const { verifyApiRequest } = require('../../functions/route_fns/verify/apiVerification');
@@ -36,14 +35,14 @@ const router = express.Router();
 /**
  * POST /api/verifier/verify-single
  * Verify a single email address
- * Requires JWT authentication
+ * No authentication required (dev environment)
  *
  * @function verifySingleEmail - From singleEmailVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with verification request ID
  */
-router.post('/verify-single', authenticate, verifySingleEmail);
+router.post('/verify-single', allowAll, verifySingleEmail);
 
 
 /**
@@ -68,14 +67,14 @@ router.post('/v1/verify', authenticateApiKey, verifyApiRequest);
  * GET /api/verifier/verification/:verification_request_id/status
  * Get verification status and progress for ANY request type (single, CSV, or API)
  * Returns ONLY status and progress information - NO results
- * Supports dual authentication (JWT OR API key)
+ * Supports API key authentication (or no auth for dev)
  *
  * @function getVerificationStatus - From verificationStatus.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with verification status and progress
  */
-router.get('/verification/:verification_request_id/status', authenticateEither, getVerificationStatus);
+router.get('/verification/:verification_request_id/status', allowAll, getVerificationStatus);
 
 
 /**
@@ -83,7 +82,7 @@ router.get('/verification/:verification_request_id/status', authenticateEither, 
  * Get verification results for ANY verification status
  * While processing: returns status info (allows single-endpoint polling)
  * When completed: returns results with pagination (default 20 items per page)
- * Supports dual authentication (JWT OR API key)
+ * Supports API key authentication (or no auth for dev)
  * Query params: ?page=1&per_page=20
  *
  * @function getVerificationResults - From verificationResults.js
@@ -91,13 +90,13 @@ router.get('/verification/:verification_request_id/status', authenticateEither, 
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with status or paginated results
  */
-router.get('/verification/:verification_request_id/results', authenticateEither, getVerificationResults);
+router.get('/verification/:verification_request_id/results', allowAll, getVerificationResults);
 
 
 /**
  * POST /api/verifier/csv/upload
  * Upload CSV file and detect email column in one step
- * Requires authentication and multipart/form-data
+ * No authentication required (dev environment)
  * Body parameters: csvFile (file), list_name (string), has_header (boolean)
  *
  * @function uploadCSV - From bulkCSVVerification.js
@@ -105,7 +104,7 @@ router.get('/verification/:verification_request_id/results', authenticateEither,
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with CSV upload details and email detection results
  */
-router.post('/csv/upload', authenticate, upload.single('csvFile'), (err, req, res, next) => {
+router.post('/csv/upload', allowAll, upload.single('csvFile'), (err, req, res, next) => {
 	if (err) {
 		if (err.code === 'LIMIT_FILE_SIZE') {
 			return res.status(400).json({
@@ -131,33 +130,33 @@ router.post('/csv/upload', authenticate, upload.single('csvFile'), (err, req, re
 /**
  * POST /api/verifier/csv/verify
  * Submit CSV for email verification
- * Requires authentication
+ * No authentication required (dev environment)
  *
  * @function submitCSVVerification - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with verification request details
  */
-router.post('/csv/verify', authenticate, submitCSVVerification);
+router.post('/csv/verify', allowAll, submitCSVVerification);
 
 
 /**
  * GET /api/verifier/csv/:csv_upload_id/download
  * Download CSV with verification results
- * Requires authentication
+ * No authentication required (dev environment)
  *
  * @function downloadCSVResults - From bulkCSVVerification.js
  * @param {import('express').Request} req - Express request object
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends CSV file with results
  */
-router.get('/csv/:csv_upload_id/download', authenticate, downloadCSVResults);
+router.get('/csv/:csv_upload_id/download', allowAll, downloadCSVResults);
 
 
 /**
  * GET /api/verifier/history
- * Get user's verification history with time-based filters
- * Requires authentication
+ * Get verification history with time-based filters
+ * No authentication required (dev environment)
  * Query params: ?page=1&per_page=50&period=this_month
  * Period options: this_month, last_month, last_6_months
  *
@@ -165,7 +164,7 @@ router.get('/csv/:csv_upload_id/download', authenticate, downloadCSVResults);
  * @param {import('express').Response} res - Express response object
  * @returns {Promise<void>} Sends JSON response with paginated history
  */
-router.get('/history', authenticate, getHistory);
+router.get('/history', allowAll, getHistory);
 
 
 /**

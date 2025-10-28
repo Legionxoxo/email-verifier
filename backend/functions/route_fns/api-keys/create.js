@@ -20,15 +20,8 @@ const {
 async function handleCreateApiKey(req, res) {
     try {
         const { name, expiryDays } = req.body;
-        const userId = req.user?.userId;
-
-        // Validate user authentication
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: 'Authentication required. Please log in.'
-            });
-        }
+        // For simple auth, use a default user_id of 1 if no user is authenticated
+        const userId = req.user?.userId || 1;
 
         // Validate name
         if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -57,9 +50,10 @@ async function handleCreateApiKey(req, res) {
 
         const db = getDatabase();
 
-        // Get user's API key limit
-        const user = /** @type {{api_key_limit: number} | undefined} */ (db.prepare(`
-            SELECT api_key_limit
+        // For simple auth, use unlimited API keys (no limit check)
+        // Check if user exists
+        const user = /** @type {{id: number} | undefined} */ (db.prepare(`
+            SELECT id
             FROM users
             WHERE id = ?
         `).get(userId));
@@ -89,20 +83,7 @@ async function handleCreateApiKey(req, res) {
         try {
             db.prepare('BEGIN TRANSACTION').run();
 
-            // Check active API key count within transaction
-            const activeKeyCount = /** @type {{count: number}} */ (db.prepare(`
-                SELECT COUNT(*) as count
-                FROM api_keys
-                WHERE user_id = ? AND is_revoked = 0
-            `).get(userId));
-
-            if (activeKeyCount.count >= user.api_key_limit) {
-                db.prepare('ROLLBACK').run();
-                return res.status(403).json({
-                    success: false,
-                    message: `You have reached the maximum limit of ${user.api_key_limit} API keys. Please revoke an existing key before creating a new one.`
-                });
-            }
+            // For simple auth, skip API key limit check (unlimited keys)
 
             // Insert API key into database
             const insertKey = db.prepare(`

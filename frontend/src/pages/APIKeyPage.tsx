@@ -1,6 +1,6 @@
 /**
- * API Token Management Page
- * Allows users to create, view, and revoke API tokens
+ * API Key Management Page
+ * Allows users to create, view, and revoke API keys
  */
 
 import React from 'react';
@@ -24,35 +24,35 @@ import { apiKeyApi } from '../lib/api';
 import type { ApiKey } from '../lib/api';
 
 /**
- * API Token management page
- * @returns APITokenPage JSX element
+ * API Key management page
+ * @returns APIKeyPage JSX element
  */
-export function APITokenPage() {
+export function APIKeyPage() {
     const navigate = useNavigate();
     const location = useLocation();
 
     // State management
-    const [tokens, setTokens] = React.useState<ApiKey[]>([]);
+    const [keys, setKeys] = React.useState<ApiKey[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState<string>('');
     const [showCreateForm, setShowCreateForm] = React.useState(false);
 
-    // Create token form state
-    const [tokenName, setTokenName] = React.useState('');
+    // Create key form state
+    const [keyName, setKeyName] = React.useState('');
     const [expiryDays, setExpiryDays] = React.useState<number | ''>('');
-    const [newToken, setNewToken] = React.useState<string>('');
-    const [copiedTokenId, setCopiedTokenId] = React.useState<string>('');
+    const [newKey, setNewKey] = React.useState<string>('');
+    const [copiedKeyId, setCopiedKeyId] = React.useState<string>('');
 
-    // Load tokens on mount and whenever we navigate to this page
+    // Load keys on mount and whenever we navigate to this page
     React.useEffect(() => {
-        loadTokens();
+        loadKeys();
     }, [location.pathname]);
 
     // Also reload when page becomes visible again (handles browser tab switching)
     React.useEffect(() => {
         const handleVisibilityChange = () => {
             if (!document.hidden) {
-                loadTokens();
+                loadKeys();
             }
         };
 
@@ -63,46 +63,46 @@ export function APITokenPage() {
     }, []);
 
 
-    const loadTokens = async () => {
+    const loadKeys = async () => {
         try {
             setLoading(true);
             setError('');
 
             const apiKeys = await apiKeyApi.listApiKeys();
-            setTokens(apiKeys);
+            setKeys(apiKeys);
 
         } catch (error) {
-            console.error('Failed to load API tokens:', error);
-            setError(error instanceof Error ? error.message : 'Failed to load API tokens');
-            toast.error(error instanceof Error ? error.message : 'Failed to load API tokens');
+            console.error('Failed to load API keys:', error);
+            setError(error instanceof Error ? error.message : 'Failed to load API keys');
+            toast.error(error instanceof Error ? error.message : 'Failed to load API keys');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCreateToken = async () => {
+    const handleCreateKey = async () => {
         // Set loading state immediately to prevent multiple clicks
         setLoading(true);
         setError('');
 
         try {
             // Validate inputs
-            if (!tokenName.trim()) {
-                setError('Please enter a token name');
-                toast.error('Please enter a token name');
+            if (!keyName.trim()) {
+                setError('Please enter a key name');
+                toast.error('Please enter a key name');
                 return;
             }
 
             const response = await apiKeyApi.createApiKey(
-                tokenName.trim(),
+                keyName.trim(),
                 expiryDays ? Number(expiryDays) : null
             );
 
             // Store the full plain-text API key to display
-            setNewToken(response.apiKey);
+            setNewKey(response.apiKey);
 
-            // Add masked version to tokens list
-            const newTokenData: ApiKey = {
+            // Add masked version to keys list
+            const newKeyData: ApiKey = {
                 id: response.keyData.id,
                 name: response.keyData.name,
                 key_masked: `${response.keyData.key_prefix}***xyz`,
@@ -112,59 +112,59 @@ export function APITokenPage() {
                 is_revoked: false
             };
 
-            setTokens(prev => [newTokenData, ...prev]);
+            setKeys(prev => [newKeyData, ...prev]);
             toast.success('API key created successfully!');
 
-            // Reset form fields but keep newToken to show warning
-            setTokenName('');
+            // Reset form fields but keep newKey to show warning
+            setKeyName('');
             setExpiryDays('');
 
         } catch (error) {
-            console.error('Failed to create API token:', error);
-            setError(error instanceof Error ? error.message : 'Failed to create API token');
-            toast.error(error instanceof Error ? error.message : 'Failed to create API token');
+            console.error('Failed to create API key:', error);
+            setError(error instanceof Error ? error.message : 'Failed to create API key');
+            toast.error(error instanceof Error ? error.message : 'Failed to create API key');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRevokeToken = async (tokenId: number) => {
+    const handleRevokeKey = async (keyId: number) => {
         try {
-            if (!confirm('Are you sure you want to revoke this token? This action cannot be undone.')) {
+            if (!confirm('Are you sure you want to revoke this key? This action cannot be undone.')) {
                 return;
             }
 
             setLoading(true);
             setError('');
 
-            await apiKeyApi.revokeApiKey(tokenId);
+            await apiKeyApi.revokeApiKey(keyId);
 
             // Remove from list
-            setTokens(prev => prev.filter(t => t.id !== tokenId));
+            setKeys(prev => prev.filter(k => k.id !== keyId));
             toast.success('API key revoked successfully');
 
         } catch (error) {
-            console.error('Failed to revoke API token:', error);
-            setError(error instanceof Error ? error.message : 'Failed to revoke API token');
-            toast.error(error instanceof Error ? error.message : 'Failed to revoke API token');
+            console.error('Failed to revoke API key:', error);
+            setError(error instanceof Error ? error.message : 'Failed to revoke API key');
+            toast.error(error instanceof Error ? error.message : 'Failed to revoke API key');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleCopyToken = (token: string, tokenId: number | string) => {
+    const handleCopyKey = (key: string, keyId: number | string) => {
         try {
-            navigator.clipboard.writeText(token);
-            setCopiedTokenId(String(tokenId));
-            toast.success('Token copied to clipboard');
+            navigator.clipboard.writeText(key);
+            setCopiedKeyId(String(keyId));
+            toast.success('Key copied to clipboard');
 
             // Reset copied state after 2 seconds
             setTimeout(() => {
-                setCopiedTokenId('');
+                setCopiedKeyId('');
             }, 2000);
         } catch (error) {
-            console.error('Failed to copy token:', error);
-            toast.error('Failed to copy token');
+            console.error('Failed to copy key:', error);
+            toast.error('Failed to copy key');
         }
     };
 
@@ -238,10 +238,10 @@ export function APITokenPage() {
                             </Button>
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900">
-                                    API Tokens
+                                    API Keys
                                 </h1>
                                 <p className="text-gray-600 mt-1">
-                                    Create and manage API tokens for programmatic access
+                                    Create and manage API keys for programmatic access
                                 </p>
                             </div>
                         </div>
@@ -253,7 +253,7 @@ export function APITokenPage() {
                             disabled={loading}
                         >
                             <Plus className="h-4 w-4" />
-                            <span>Create Token</span>
+                            <span>Create Key</span>
                         </Button>
                     </div>
                 </div>
@@ -293,27 +293,27 @@ export function APITokenPage() {
                     >
                         <Card>
                             <CardHeader>
-                                <CardTitle>Create New API Token</CardTitle>
+                                <CardTitle>Create New API Key</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {newToken ? (
-                                    // Show only the token warning after creation
+                                {newKey ? (
+                                    // Show only the key warning after creation
                                     <>
                                         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                                             <div className="flex items-start space-x-2">
                                                 <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-yellow-900 mb-2">
-                                                        Save this token now! You won't be able to see it again.
+                                                        Save this key now! You won't be able to see it again.
                                                     </p>
                                                     <div className="flex items-center space-x-2">
                                                         <code className="flex-1 px-3 py-2 bg-white border border-yellow-300 rounded text-sm font-mono text-gray-900 break-all">
-                                                            {newToken}
+                                                            {newKey}
                                                         </code>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => handleCopyToken(newToken, 'new')}
+                                                            onClick={() => handleCopyKey(newKey, 'new')}
                                                             className="cursor-pointer flex-shrink-0"
                                                         >
                                                             <Copy className="h-4 w-4" />
@@ -328,9 +328,9 @@ export function APITokenPage() {
                                                 variant="primary"
                                                 onClick={() => {
                                                     setShowCreateForm(false);
-                                                    setTokenName('');
+                                                    setKeyName('');
                                                     setExpiryDays('');
-                                                    setNewToken('');
+                                                    setNewKey('');
                                                 }}
                                                 className="cursor-pointer"
                                             >
@@ -339,16 +339,16 @@ export function APITokenPage() {
                                         </div>
                                     </>
                                 ) : (
-                                    // Show form fields before token creation
+                                    // Show form fields before key creation
                                     <>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <Input
-                                                label="Token Name"
+                                                label="Key Name"
                                                 type="text"
                                                 placeholder="e.g., Production API"
-                                                value={tokenName}
-                                                onChange={(e) => setTokenName(e.target.value)}
-                                                helper="A descriptive name for this token"
+                                                value={keyName}
+                                                onChange={(e) => setKeyName(e.target.value)}
+                                                helper="A descriptive name for this key"
                                                 fullWidth
                                             />
 
@@ -358,7 +358,7 @@ export function APITokenPage() {
                                                 placeholder="e.g., 30 (leave empty for no expiry)"
                                                 value={expiryDays}
                                                 onChange={(e) => setExpiryDays(e.target.value ? parseInt(e.target.value) : '')}
-                                                helper="Token will expire after this many days"
+                                                helper="Key will expire after this many days"
                                                 fullWidth
                                             />
                                         </div>
@@ -368,7 +368,7 @@ export function APITokenPage() {
                                                 variant="outline"
                                                 onClick={() => {
                                                     setShowCreateForm(false);
-                                                    setTokenName('');
+                                                    setKeyName('');
                                                     setExpiryDays('');
                                                 }}
                                                 disabled={loading}
@@ -378,12 +378,12 @@ export function APITokenPage() {
                                             </Button>
                                             <Button
                                                 variant="primary"
-                                                onClick={handleCreateToken}
-                                                disabled={loading || !tokenName.trim()}
+                                                onClick={handleCreateKey}
+                                                disabled={loading || !keyName.trim()}
                                                 loading={loading}
                                                 className="cursor-pointer"
                                             >
-                                                Create Token
+                                                Create Key
                                             </Button>
                                         </div>
                                     </>
@@ -393,7 +393,7 @@ export function APITokenPage() {
                     </motion.div>
                 )}
 
-                {/* Tokens List */}
+                {/* Keys List */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -403,20 +403,20 @@ export function APITokenPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center space-x-2">
                                 <Key className="h-5 w-5" />
-                                <span>Your API Tokens</span>
+                                <span>Your API Keys</span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {loading && tokens.length === 0 ? (
+                            {loading && keys.length === 0 ? (
                                 <CardSkeleton rows={3} />
-                            ) : tokens.length === 0 ? (
+                            ) : keys.length === 0 ? (
                                 <div className="text-center py-12">
                                     <Key className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                        No API Tokens
+                                        No API Keys
                                     </h3>
                                     <p className="text-sm text-gray-600 mb-4">
-                                        Create your first API token to start using the API
+                                        Create your first API key to start using the API
                                     </p>
                                     <Button
                                         variant="primary"
@@ -424,40 +424,40 @@ export function APITokenPage() {
                                         className="cursor-pointer"
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
-                                        Create Token
+                                        Create Key
                                     </Button>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {tokens.map((token) => (
+                                    {keys.map((key) => (
                                         <div
-                                            key={token.id}
+                                            key={key.id}
                                             className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
                                         >
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
                                                     <div className="flex items-center space-x-3 mb-2">
                                                         <h3 className="text-base font-semibold text-gray-900">
-                                                            {token.name}
+                                                            {key.name}
                                                         </h3>
-                                                        {token.expires_at && (
+                                                        {key.expires_at && (
                                                             <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                                                                Expires {formatDate(token.expires_at)}
+                                                                Expires {formatDate(key.expires_at)}
                                                             </span>
                                                         )}
                                                     </div>
 
                                                     <div className="flex items-center space-x-2 mb-3">
                                                         <code className="px-3 py-1.5 bg-gray-100 rounded text-sm font-mono text-gray-700">
-                                                            {token.key_masked}
+                                                            {key.key_masked}
                                                         </code>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => handleCopyToken(token.key_masked, token.id)}
+                                                            onClick={() => handleCopyKey(key.key_masked, key.id)}
                                                             className="cursor-pointer"
                                                         >
-                                                            {copiedTokenId === String(token.id) ? (
+                                                            {copiedKeyId === String(key.id) ? (
                                                                 <CheckCircle className="h-4 w-4 text-green-600" />
                                                             ) : (
                                                                 <Copy className="h-4 w-4" />
@@ -466,10 +466,10 @@ export function APITokenPage() {
                                                     </div>
 
                                                     <div className="flex items-center space-x-4 text-xs">
-                                                        <span className="text-gray-500">Created {formatDate(token.created_at)}</span>
+                                                        <span className="text-gray-500">Created {formatDate(key.created_at)}</span>
                                                         <span className="text-gray-300">•</span>
                                                         <span className="text-gray-600">
-                                                            Last used: <span className="font-medium text-blue-600">{formatRelativeTime(token.last_used)}</span>
+                                                            Last used: <span className="font-medium text-blue-600">{formatRelativeTime(key.last_used)}</span>
                                                         </span>
                                                     </div>
                                                 </div>
@@ -477,7 +477,7 @@ export function APITokenPage() {
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleRevokeToken(token.id)}
+                                                    onClick={() => handleRevokeKey(key.id)}
                                                     className="text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
                                                     disabled={loading}
                                                 >
@@ -508,8 +508,8 @@ export function APITokenPage() {
                                         API Documentation
                                     </p>
                                     <p className="text-sm text-blue-800">
-                                        Use your API token in the <code className="px-1 py-0.5 bg-blue-100 rounded">Authorization</code> header as{' '}
-                                        <code className="px-1 py-0.5 bg-blue-100 rounded">Bearer YOUR_TOKEN</code>.
+                                        Use your API key in the <code className="px-1 py-0.5 bg-blue-100 rounded">Authorization</code> header as{' '}
+                                        <code className="px-1 py-0.5 bg-blue-100 rounded">Bearer YOUR_KEY</code>.
                                         Check our API documentation for more details.
                                     </p>
                                 </div>

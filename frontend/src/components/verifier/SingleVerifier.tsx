@@ -115,8 +115,8 @@ export function SingleVerifier({ onVerifyingChange }: SingleVerifierProps) {
                     onClick={handleVerify}
                     disabled={isVerifying || !email.trim()}
                     loading={isVerifying}
-                    className="px-8 py-3 bg-[#4169E1] hover:bg-[#3558C7] text-white font-medium text-base
-                                rounded-xl shadow-sm hover:shadow-md min-w-[140px]"
+                    className="px-8 py-6 bg-[#4169E1] hover:bg-[#3558C7] text-white font-medium text-base
+                                rounded-xl shadow-sm hover:shadow-md min-w-[140px] border-[#4169E1]"
                     aria-label="Verify email button"
                 >
                     <span>Verify</span>

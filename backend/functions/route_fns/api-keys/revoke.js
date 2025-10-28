@@ -15,15 +15,8 @@ const { getDatabase } = require('../../../database/connection');
 async function handleRevokeApiKey(req, res) {
     try {
         const { id } = req.params;
-        const userId = req.user?.userId;
-
-        // Validate user authentication
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: 'Authentication required. Please log in.'
-            });
-        }
+        // For simple auth, use a default user_id of 1 if no user is authenticated
+        const userId = req.user?.userId || 1;
 
         // Validate API key ID
         const keyId = parseInt(id, 10);

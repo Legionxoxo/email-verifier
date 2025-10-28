@@ -8,7 +8,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout';
 import { VerificationProgress, type VerificationStep } from '../components/ui';
 import { Button } from '../components/ui';
-import { useAuth } from '../hooks';
 import { verificationApi } from '../lib/api';
 
 
@@ -19,24 +18,11 @@ import { verificationApi } from '../lib/api';
 export function VerificationProgressPage() {
     const { verificationRequestId } = useParams<{ verificationRequestId: string }>();
     const navigate = useNavigate();
-    const { user, logout } = useAuth();
 
     const [currentStep, setCurrentStep] = useState<VerificationStep>('received');
     const [errorMessage, setErrorMessage] = useState<string>('');
     const [isRetrying, setIsRetrying] = useState<boolean>(false);
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-
-    // Handle logout
-    const handleLogout = async () => {
-        try {
-            await logout();
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            console.debug('Logout handler completed');
-        }
-    };
 
 
     // Handle retry
@@ -170,10 +156,7 @@ export function VerificationProgressPage() {
 
 
     return (
-        <DashboardLayout
-            user={user || undefined}
-            onLogout={handleLogout}
-        >
+        <DashboardLayout>
             <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] px-4 space-y-6">
                 <VerificationProgress
                     currentStep={currentStep}

@@ -13,8 +13,7 @@ const path = require('path');
 const { validateEnvironment, PORT } = require('./data/env');
 const { initializeDatabase } = require('./database/connection');
 const { helmetConfig, corsConfig } = require('./functions/middleware/security');
-const authRoutes = require('./routes/api/auth');
-const settingsRoutes = require('./routes/api/settings');
+const authRoutes = require('./routes/api/auth-simple');
 const verifierRoutes = require('./routes/api/verifier');
 const apiKeysRoutes = require('./routes/api/api-keys');
 
@@ -96,11 +95,8 @@ function setupMiddleware() {
  */
 function setupRoutes() {
 	try {
-		// Authentication routes
+		// Authentication routes (simple, no database)
 		app.use('/api/auth', authRoutes);
-
-		// Settings routes
-		app.use('/api/settings', settingsRoutes);
 
 		// Verifier routes
 		app.use('/api/verifier', verifierRoutes);

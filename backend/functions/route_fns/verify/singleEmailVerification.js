@@ -22,7 +22,8 @@ const { createVerificationRequest, updateVerificationStatus } = require('./verif
 async function verifySingleEmail(req, res) {
 	try {
 		const { email } = req.body;
-		const user_id = req.user?.id;
+		// For simple auth, use a default user_id of 1 if no user is authenticated
+		const user_id = req.user?.id || 1;
 
 		// Validate input
 		if (!email || typeof email !== 'string') {
@@ -41,13 +42,8 @@ async function verifySingleEmail(req, res) {
 			});
 		}
 
-		// Check if user is authenticated
-		if (!user_id) {
-			return res.status(401).json({
-				success: false,
-				message: 'Authentication required',
-			});
-		}
+		// For simple auth with allowAll middleware, user authentication is not required
+		// The user_id defaults to 1 for dev environment
 
 		// Generate verification request ID
 		const verification_request_id = `single-${uuidv4()}`;

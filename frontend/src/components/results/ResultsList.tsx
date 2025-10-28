@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import type { EmailVerificationResult } from '../../pages/VerificationResultsPage';
 import { toast } from 'react-toastify';
+import { verificationApi } from '../../lib/api';
 
 
 // Interface for component props
@@ -86,7 +87,6 @@ export function ResultsList({ results, totalCount, csvUploadId, listName, origin
             toast.info('Downloading results...');
 
             // Use backend API to download enriched CSV
-            const { verificationApi } = await import('../../lib/api');
             const blob = await verificationApi.downloadCSVResults(csvUploadId);
 
             // Determine filename - prefer list_name, fallback to original_filename

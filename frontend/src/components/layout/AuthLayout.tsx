@@ -36,7 +36,7 @@ export function AuthLayout({
             <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
                 {/* Background pattern */}
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 opacity-50" />
-                
+
                 {/* Content container */}
                 <div className="relative sm:mx-auto sm:w-full sm:max-w-md">
                     {/* Back button */}
@@ -47,17 +47,17 @@ export function AuthLayout({
                             whileHover={{ x: -2 }}
                             whileTap={{ scale: 0.98 }}
                         >
-                            <svg 
-                                className="w-4 h-4 mr-2" 
-                                fill="none" 
-                                stroke="currentColor" 
+                            <svg
+                                className="w-4 h-4 mr-2"
+                                fill="none"
+                                stroke="currentColor"
                                 viewBox="0 0 24 24"
                             >
-                                <path 
-                                    strokeLinecap="round" 
-                                    strokeLinejoin="round" 
-                                    strokeWidth={2} 
-                                    d="M15 19l-7-7 7-7" 
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 19l-7-7 7-7"
                                 />
                             </svg>
                             Back
@@ -65,14 +65,14 @@ export function AuthLayout({
                     )}
 
                     {/* Logo/Brand */}
-                    <motion.div 
+                    <motion.div
                         className="text-center mb-8"
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
                     >
                         <div className="mx-auto h-12 w-12 bg-gray-900 rounded-lg flex items-center justify-center mb-4">
-                            <span className="text-white font-bold text-xl">M</span>
+                            <span className="text-white font-bold text-xl">B</span>
                         </div>
                         <h1 className="text-2xl font-bold text-gray-900 mb-2">
                             {title}
@@ -96,14 +96,14 @@ export function AuthLayout({
                     </motion.div>
 
                     {/* Footer */}
-                    <motion.div 
+                    <motion.div
                         className="mt-8 text-center"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.5, delay: 0.2 }}
                     >
                         <p className="text-xs text-gray-500">
-                            © 2024 MicroSAAS. All rights reserved.
+                            © 2025 BrandNav All rights reserved.
                         </p>
                     </motion.div>
                 </div>
@@ -111,7 +111,7 @@ export function AuthLayout({
         );
     } catch (error) {
         console.error('AuthLayout render error:', error);
-        
+
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
                 <Card padding="lg">
