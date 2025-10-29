@@ -1,0 +1,510 @@
+{
+	"info": {
+		"name": "Email Verifier API",
+		"description": "Programmatic email verification API with API key authentication. This collection includes all endpoints for verifying emails via API keys.\n\n## How to Use This Collection\n\n### Setup (One-time)\n1. Click on the collection name in the left sidebar\n2. Go to the **Variables** tab\n3. Update the following variables:\n   - `base_url` - Your server URL (default: `http://localhost:5000`)\n   - `api_key` - Your API key from the dashboard (create one in Settings → API Keys)\n4. Click **Save**\n\n### Testing Workflow\n1. **Submit Email Verification** - Run this request first:\n   - Edit the request body to add your emails in the `emails` array (required)\n   - Optionally add a `responseUrl` for webhook notifications (optional)\n   - Example: `{\"emails\": [\"test@example.com\", \"user@gmail.com\"], \"responseUrl\": \"https://your-app.com/webhook\"}`\n   - The `verification_request_id` from the response will be automatically saved\n2. **Get Verification Status** - Check the progress of your verification (uses auto-saved ID)\n3. **Get Verification Results** - Get the full results when verification is complete (uses auto-saved ID)\n4. **Get Verification History** - View all your past verification requests\n\n### Important Notes\n- **Automatic ID Capture**: The `verification_request_id` is automatically captured from each Submit request response\n- **ID Overwrites**: Each new Submit request will overwrite the saved ID. To check old verifications, manually update the `verification_request_id` variable or get IDs from the History endpoint\n- **Authentication**: All requests use Bearer token authentication (format: `Bearer your_api_key`)\n- **Emails**: You can submit 1 to 10,000 emails per request\n- **Webhook (Optional)**: Add a `responseUrl` to receive results via webhook when verification completes\n- **Console Logs**: Check the Postman Console (View → Show Postman Console) to see the saved verification_request_id\n\n## Endpoints Included\n- POST `/api/verifier/v1/verify` - Submit emails for verification\n- GET `/api/verifier/verification/:id/status` - Check verification status\n- GET `/api/verifier/verification/:id/results` - Get verification results\n- GET `/api/verifier/history` - Get verification history",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"version": "1.0.0"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{api_key}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "api_key",
+			"value": "brndnv_sk_your_api_key_here",
+			"type": "string"
+		},
+		{
+			"key": "verification_request_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Submit Email Verification",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{api_key}}",
+							"type": "string"
+						}
+					]
+				},
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"emails\": [\n    \"user@example.com\",\n    \"test@gmail.com\",\n    \"contact@company.com\"\n  ],\n  \"responseUrl\": \"https://your-app.com/api/webhooks/email-results\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/verifier/v1/verify",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"verifier",
+						"v1",
+						"verify"
+					]
+				},
+				"description": "Submit emails for verification. Accepts 1-10,000 emails per request. Optional webhook URL for result delivery.\n\n**Request Body:**\n- `emails` (required): Array of email addresses to verify\n- `responseUrl` (optional): Webhook URL to receive results\n\n**Response (202 Accepted):**\nReturns verification_request_id that you'll use to check status/results.\n\n**Note:** The verification_request_id is automatically saved to the collection variable for use in other requests!"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"// Automatically save verification_request_id to collection variable",
+							"if (pm.response.code === 202) {",
+							"    var jsonData = pm.response.json();",
+							"    if (jsonData.success && jsonData.data && jsonData.data.verification_request_id) {",
+							"        pm.collectionVariables.set('verification_request_id', jsonData.data.verification_request_id);",
+							"        console.log('Saved verification_request_id: ' + jsonData.data.verification_request_id);",
+							"    }",
+							"}"
+						]
+					}
+				}
+			],
+			"response": [
+				{
+					"name": "Success - Verification Accepted",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emails\": [\n    \"user@example.com\",\n    \"test@gmail.com\"\n  ],\n  \"responseUrl\": \"https://your-app.com/webhooks/results\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verifier/v1/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"v1",
+								"verify"
+							]
+						}
+					},
+					"status": "Accepted",
+					"code": 202,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": true,\n  \"message\": \"Verification request accepted\",\n  \"data\": {\n    \"verification_request_id\": \"api-550e8400-e29b-41d4-a716-446655440000\",\n    \"total_emails\": 2,\n    \"status\": \"processing\",\n    \"response_url\": \"https://your-app.com/webhooks/results\"\n  }\n}"
+				},
+				{
+					"name": "Error - Invalid Email Format",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emails\": [\n    \"invalid-email\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verifier/v1/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"v1",
+								"verify"
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": false,\n  \"message\": \"Request validation failed\",\n  \"errors\": [\n    \"Invalid email format at index 0: invalid-email\"\n  ]\n}"
+				},
+				{
+					"name": "Error - Invalid API Key",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emails\": [\n    \"user@example.com\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verifier/v1/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"v1",
+								"verify"
+							]
+						}
+					},
+					"status": "Unauthorized",
+					"code": 401,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": false,\n  \"message\": \"Invalid API key\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Verification Status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{api_key}}",
+							"type": "string"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/verifier/verification/{{verification_request_id}}/status",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"verifier",
+						"verification",
+						"{{verification_request_id}}",
+						"status"
+					]
+				},
+				"description": "Check the status and progress of a verification request. Returns only status information, no results.\n\n**Path Parameters:**\n- `verification_request_id`: The ID returned from the verify endpoint\n\n**Response:**\nReturns status (pending, processing, completed, failed) and progress information.\n\n**Progress Steps:**\n- `received` - Request received and queued\n- `processing` - Currently verifying emails\n- `antiGreyListing` - Handling greylisting checks\n- `complete` - Verification finished\n- `failed` - Verification failed"
+			},
+			"response": [
+				{
+					"name": "Processing",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/verifier/verification/api-550e8400/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"verification",
+								"api-550e8400",
+								"status"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": true,\n  \"data\": {\n    \"verification_request_id\": \"api-550e8400-e29b-41d4-a716-446655440000\",\n    \"request_type\": \"api\",\n    \"status\": \"processing\",\n    \"progress_step\": \"processing\",\n    \"created_at\": 1729260000000,\n    \"updated_at\": 1729260030000\n  }\n}"
+				},
+				{
+					"name": "Completed",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/verifier/verification/api-550e8400/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"verification",
+								"api-550e8400",
+								"status"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": true,\n  \"data\": {\n    \"verification_request_id\": \"api-550e8400-e29b-41d4-a716-446655440000\",\n    \"request_type\": \"api\",\n    \"status\": \"completed\",\n    \"progress_step\": \"complete\",\n    \"created_at\": 1729260000000,\n    \"updated_at\": 1729260120000\n  }\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Verification Results",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{api_key}}",
+							"type": "string"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/verifier/verification/{{verification_request_id}}/results?page=1&per_page=20",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"verifier",
+						"verification",
+						"{{verification_request_id}}",
+						"results"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Page number (default: 1)"
+						},
+						{
+							"key": "per_page",
+							"value": "20",
+							"description": "Results per page (default: 20, max: 100)"
+						}
+					]
+				},
+				"description": "Get verification results. This endpoint works for both checking status and getting results.\n\n**While Processing:** Returns status information\n**When Complete:** Returns paginated results with statistics\n\n**Path Parameters:**\n- `verification_request_id`: The ID returned from the verify endpoint\n\n**Query Parameters:**\n- `page` (optional): Page number (default: 1)\n- `per_page` (optional): Results per page (default: 20, max: 100)\n\n**Polling Strategy:**\nPoll this endpoint every 5-10 seconds until status is \"completed\""
+			},
+			"response": [
+				{
+					"name": "Processing - Not Ready",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/verifier/verification/api-550e8400/results",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"verification",
+								"api-550e8400",
+								"results"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": true,\n  \"data\": {\n    \"verification_request_id\": \"api-550e8400-e29b-41d4-a716-446655440000\",\n    \"request_type\": \"api\",\n    \"status\": \"processing\",\n    \"progress_step\": \"processing\",\n    \"message\": \"Verification in progress. Poll this endpoint to get results when complete.\",\n    \"created_at\": 1729260000000,\n    \"updated_at\": 1729260030000\n  }\n}"
+				},
+				{
+					"name": "Completed - With Results",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/verifier/verification/api-550e8400/results?page=1&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"verification",
+								"api-550e8400",
+								"results"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "20"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": true,\n  \"data\": {\n    \"verification_request_id\": \"api-550e8400-e29b-41d4-a716-446655440000\",\n    \"request_type\": \"api\",\n    \"status\": \"completed\",\n    \"results\": [\n      {\n        \"email\": \"user@example.com\",\n        \"status\": \"valid\",\n        \"message\": \"This is a valid email address!\",\n        \"reachable\": \"yes\",\n        \"syntax\": {\n          \"username\": \"user\",\n          \"domain\": \"example.com\",\n          \"valid\": true\n        },\n        \"smtp\": {\n          \"host_exists\": true,\n          \"full_inbox\": false,\n          \"catch_all\": false,\n          \"deliverable\": true,\n          \"disabled\": false\n        },\n        \"disposable\": false,\n        \"role_account\": false,\n        \"free\": false,\n        \"has_mx_records\": true\n      },\n      {\n        \"email\": \"test@gmail.com\",\n        \"status\": \"valid\",\n        \"message\": \"This is a valid email address!\",\n        \"reachable\": \"yes\",\n        \"syntax\": {\n          \"username\": \"test\",\n          \"domain\": \"gmail.com\",\n          \"valid\": true\n        },\n        \"smtp\": {\n          \"host_exists\": true,\n          \"full_inbox\": false,\n          \"catch_all\": false,\n          \"deliverable\": true,\n          \"disabled\": false\n        },\n        \"disposable\": false,\n        \"role_account\": false,\n        \"free\": true,\n        \"has_mx_records\": true\n      }\n    ],\n    \"pagination\": {\n      \"page\": 1,\n      \"per_page\": 20,\n      \"total\": 2,\n      \"total_pages\": 1,\n      \"has_more\": false\n    },\n    \"statistics\": {\n      \"valid\": 2,\n      \"invalid\": 0,\n      \"catch_all\": 0,\n      \"unknown\": 0\n    },\n    \"created_at\": 1729260000000,\n    \"completed_at\": 1729260120000\n  }\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Verification History",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{api_key}}",
+							"type": "string"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/verifier/history?page=1&per_page=50&period=this_month",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"verifier",
+						"history"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Page number (default: 1)"
+						},
+						{
+							"key": "per_page",
+							"value": "50",
+							"description": "Results per page (default: 50)"
+						},
+						{
+							"key": "period",
+							"value": "this_month",
+							"description": "Time filter: this_month, last_month, last_6_months"
+						}
+					]
+				},
+				"description": "Get verification history with time-based filtering. Returns all past verification requests made via API.\n\n**Query Parameters:**\n- `page` (optional): Page number (default: 1)\n- `per_page` (optional): Results per page (default: 50)\n- `period` (optional): Time filter - `this_month`, `last_month`, `last_6_months`\n\n**Response:**\nReturns paginated list of all verification requests with their status, email counts, and timestamps."
+			},
+			"response": [
+				{
+					"name": "Success - History Retrieved",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/verifier/history?page=1&per_page=50&period=this_month",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verifier",
+								"history"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "50"
+								},
+								{
+									"key": "period",
+									"value": "this_month"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"body": "{\n  \"success\": true,\n  \"data\": {\n    \"history\": [\n      {\n        \"verification_request_id\": \"api-550e8400-e29b-41d4-a716-446655440000\",\n        \"request_type\": \"api\",\n        \"status\": \"completed\",\n        \"total_emails\": 100,\n        \"completed_emails\": 100,\n        \"created_at\": 1729260000000,\n        \"completed_at\": 1729260120000,\n        \"list_name\": null\n      },\n      {\n        \"verification_request_id\": \"api-7c97a5c6-fe3a-4954-ad31-60d5fcbfd5f2\",\n        \"request_type\": \"api\",\n        \"status\": \"completed\",\n        \"total_emails\": 50,\n        \"completed_emails\": 50,\n        \"created_at\": 1729173600000,\n        \"completed_at\": 1729173660000,\n        \"list_name\": null\n      },\n      {\n        \"verification_request_id\": \"api-123e4567-e89b-12d3-a456-426614174000\",\n        \"request_type\": \"api\",\n        \"status\": \"processing\",\n        \"total_emails\": 1000,\n        \"completed_emails\": 450,\n        \"created_at\": 1729259400000,\n        \"completed_at\": null,\n        \"list_name\": null\n      }\n    ],\n    \"pagination\": {\n      \"page\": 1,\n      \"per_page\": 50,\n      \"total\": 3,\n      \"total_pages\": 1,\n      \"has_more\": false\n    }\n  }\n}"
+				}
+			]
+		}
+	]
+}
