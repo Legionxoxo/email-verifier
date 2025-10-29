@@ -63,18 +63,11 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
      */
     const handleFileSelect = async (file: File) => {
         try {
-            console.log('=== FILE SELECTED ===');
-            console.log('File selected:', file.name);
-            console.log('File size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
-            console.log('File type:', file.type);
-
             setIsProcessing(true);
             setError('');
 
             // Validate file locally first
-            console.log('Validating file...');
             const validation = validateCSVFile(file, maxFileSizeMB);
-            console.log('Validation result:', validation);
 
             if (!validation.valid) {
                 const errorMsg = validation.error || 'Invalid file';
@@ -84,17 +77,13 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
             }
 
             // Parse CSV locally for preview only (first 10 rows - lightweight, no memory issues)
-            console.log('Parsing CSV locally for preview...');
             const result = await parseCSVFullData(file, true); // Default to has_header = true
-            console.log('Parse result:', result);
 
             // Set file and parsed data - move to preview step
             // Full CSV file will be uploaded to backend for validation and processing
             setSelectedFile(file);
             setParsedData(result);
             changeStep('preview');
-
-            console.log('=== FILE PARSED LOCALLY ===');
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
@@ -236,10 +225,6 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
      */
     const handleStepOneNext = async (listName: string) => {
         try {
-            console.log('=== CSV UPLOAD & DETECTION STARTED ===');
-            console.log('List name:', listName);
-            console.log('Has header:', hasHeader);
-
             if (!selectedFile) {
                 throw new Error('No file selected');
             }
@@ -254,9 +239,7 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
             formData.append('has_header', hasHeader.toString());
 
             // Upload to backend - now includes detection in one call
-            console.log('Uploading CSV to backend with detection...');
             const uploadResponse = await verificationApi.uploadCSV(formData);
-            console.log('Upload & detection response:', uploadResponse);
 
             // Update parsed data with detection results
             if (parsedData) {
@@ -264,8 +247,6 @@ export function BulkVerifier({ maxFileSizeMB = 100, onStepChange }: BulkVerifier
                 parsedData.detectionConfidence = uploadResponse.confidence;
                 setParsedData({ ...parsedData });
             }
-
-            console.log('=== CSV UPLOAD & DETECTION COMPLETED ===');
 
             // Store only essential CSV data in localStorage (not the full rows to avoid quota issues)
             // The full CSV is already uploaded to backend via csvUploadId

@@ -84,10 +84,7 @@ export function VerificationResultsPage({
                 setLoading(true);
                 setError('');
 
-                console.log('Fetching verification results for:', verificationRequestId);
-
                 const details = await verificationApi.getVerificationResults(verificationRequestId, page);
-                console.log('Verification results:', details);
 
                 if (details.status !== 'completed') {
                     setError('Verification is not completed yet');

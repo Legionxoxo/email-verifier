@@ -33,9 +33,6 @@ export function SingleVerifier({ onVerifyingChange }: SingleVerifierProps) {
      */
     const handleVerify = async () => {
         try {
-            console.log('=== SINGLE EMAIL VERIFICATION STARTED ===');
-            console.log('Email to verify:', email);
-
             // Validate email
             if (!email.trim()) {
                 toast.error('Please enter an email address');
@@ -55,14 +52,11 @@ export function SingleVerifier({ onVerifyingChange }: SingleVerifierProps) {
 
             // Call API to submit single email verification
             const response = await verificationApi.verifySingleEmail(email.toLowerCase().trim());
-            console.log('Verification API response:', response);
 
             toast.success('Verification started!');
 
             // Navigate to verification progress page with the verification_request_id
             navigate(`/verify/${response.verification_request_id}`);
-
-            console.log('=== SINGLE EMAIL VERIFICATION COMPLETED ===');
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Verification failed';
@@ -93,7 +87,6 @@ export function SingleVerifier({ onVerifyingChange }: SingleVerifierProps) {
                     onChange={(e) => {
                         const newEmail = e.target.value;
                         setEmail(newEmail);
-                        console.log('Single Email Input:', newEmail);
                     }}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && !isVerifying) {

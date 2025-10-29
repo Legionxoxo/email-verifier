@@ -65,8 +65,6 @@ export function HistoryPage() {
                 period: selectedPeriod
             });
 
-            console.log('History response:', response);
-
             // Map API response to local format
             const mappedExports: VerificationExport[] = response.requests.map((item) => ({
                 ...item,

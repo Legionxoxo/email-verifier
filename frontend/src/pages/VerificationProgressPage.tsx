@@ -35,8 +35,6 @@ export function VerificationProgressPage() {
             window.location.reload();
         } catch (error) {
             console.error('Retry error:', error);
-        } finally {
-            console.debug('Retry handler completed');
         }
     };
 
@@ -47,8 +45,6 @@ export function VerificationProgressPage() {
             navigate('/dashboard', { replace: true });
         } catch (error) {
             console.error('Navigation error:', error);
-        } finally {
-            console.debug('Back to dashboard handler completed');
         }
     };
 
@@ -65,11 +61,8 @@ export function VerificationProgressPage() {
 
         const pollVerificationStatus = async () => {
             try {
-                console.log('Polling verification status for:', verificationRequestId);
-
                 // Fetch verification status (status only, no results)
                 const details = await verificationApi.getVerificationStatus(verificationRequestId);
-                console.log('Verification status:', details);
 
                 if (!isMounted) return;
 

@@ -709,7 +709,6 @@ NODE_ENV=production             # Environment
 CORS_ORIGIN=http://localhost:5000
 MAX_CSV_ROWS=100000             # CSV row limit
 MAX_CSV_SIZE_MB=100             # CSV file size limit
-MOCK_SMTP_MODE=false            # Testing mode
 ```
 
 ---

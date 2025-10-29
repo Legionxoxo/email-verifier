@@ -83,11 +83,6 @@ export function BulkCSVVerificationPage() {
                 throw new Error('No CSV data available');
             }
 
-            console.log('Submitting CSV for verification:', {
-                csvUploadId: csvData.csvUploadId,
-                selectedColumn
-            });
-
             // Disable button immediately to prevent multiple clicks
             setIsVerifying(true);
 
@@ -102,7 +97,6 @@ export function BulkCSVVerificationPage() {
                 csvData.csvUploadId,
                 columnIndex
             );
-            console.log('Verification response:', verificationResponse);
 
             // Clear stored data after successful submission
             localStorage.removeItem(CSV_DATA_KEY);
