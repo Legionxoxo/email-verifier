@@ -35,7 +35,7 @@ Follow these steps to get the application running:
 ### Step 1: Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Legionxoxo/email-verifier.git
 cd email-verifier
 ```
 
@@ -45,7 +45,6 @@ Create a `.env` file in the `backend` directory:
 
 ```bash
 cd backend
-nano .env
 ```
 
 Add the following required variables:
