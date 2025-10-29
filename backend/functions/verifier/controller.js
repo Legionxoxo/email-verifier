@@ -11,6 +11,7 @@ const { axiosPost } = require('../utils/axios');
 const { updateVerificationResults } = require('../route_fns/verify/verificationDB');
 const StartupRecovery = require('../recovery/startupRecovery');
 const startupCoordination = require('../recovery/startupCoordination');
+const categoryFromEmailData = require('./utils/categoryFromEmailData');
 
 /**
  * @typedef {Object} RequestObj
@@ -170,7 +171,11 @@ class Controller {
 			} finally {
 				// CRITICAL: Always signal complete, even on error, to prevent deadlock
 				startupCoordination.markRecoveryComplete();
-				this.logger.info(`Recovery phase complete [${recoverySucceeded ? 'SUCCESS' : 'FAILED'}] - releasing queue/antiGreylisting`);
+				this.logger.info(
+					`Recovery phase complete [${
+						recoverySucceeded ? 'SUCCESS' : 'FAILED'
+					}] - releasing queue/antiGreylisting`
+				);
 			}
 
 			// create the verifier worker instances
@@ -446,9 +451,9 @@ class Controller {
 
 			this.logger.debug(
 				`Partial results for ${request_id}: ` +
-				`greylisted=${greylisted_emails.length}, ` +
-				`blacklisted=${blacklisted_emails.length}, ` +
-				`recheck=${recheck_required.length}`
+					`greylisted=${greylisted_emails.length}, ` +
+					`blacklisted=${blacklisted_emails.length}, ` +
+					`recheck=${recheck_required.length}`
 			);
 
 			// incase greylisted and blacklisted emails are found, track them in database
@@ -743,37 +748,21 @@ class Controller {
 	 */
 	transformResultsForAPI(results) {
 		return results.map(result => {
-			let status, message;
+			const categorized = categoryFromEmailData(result);
 
-			// CRITICAL: Check if smtp object exists (BUG #5 fix)
-			if (result.error) {
-				status = 'unknown';
-				message = result.error_msg || 'Verification error';
-			} else if (!result.smtp) {
-				// Handle legacy or incomplete result format
-				status = 'unknown';
-				message = 'Incomplete verification data';
-			} else if (result.smtp.deliverable) {
-				status = 'valid';
-				message = 'Email verified successfully';
-			} else if (result.smtp.catch_all) {
-				status = 'catch-all';
-				message = 'Domain accepts all emails (catch-all)';
-			} else if (result.smtp.full_inbox) {
-				status = 'invalid';
-				message = 'Mailbox is full';
-			} else if (result.smtp.disabled) {
-				status = 'invalid';
-				message = 'Mailbox is disabled';
-			} else if (!result.has_mx_records) {
-				status = 'invalid';
-				message = 'No MX records found for domain';
-			} else {
-				status = 'invalid';
-				message = result.error_msg || 'Email not deliverable';
+			if (!categorized) {
+				return {
+					email: result?.email || '',
+					status: 'unknown',
+					message: 'Invalid email data'
+				};
 			}
 
-			return { email: result.email, status, message };
+			return {
+				email: categorized.email,
+				status: categorized.status,
+				message: categorized.reason
+			};
 		});
 	}
 

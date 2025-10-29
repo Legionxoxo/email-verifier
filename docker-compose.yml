@@ -1,66 +1,70 @@
-version: '3.8'
-
 services:
-  email-verifier:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    email-verifier:
+        build:
+            context: .
+            dockerfile: Dockerfile
 
-    container_name: email-verifier-app
+        container_name: email-verifier-app
 
-    # Port mapping: host:container
-    # Only expose to localhost - nginx will proxy to it
-    ports:
-      - "127.0.0.1:5000:5000"
+        # Port mapping: host:container
+        # Only expose to localhost - nginx will proxy to it
+        ports:
+            - '127.0.0.1:5000:5000'
 
-    # Load environment variables from backend/.env file
-    env_file:
-      - backend/.env
+        # Load environment variables from backend/.env file
+        env_file:
+            - backend/.env
 
-    # Environment variables (loaded from backend/.env)
-    # You can override specific variables here if needed
-    # All variables from backend/.env are automatically loaded
-    environment:
-      # Force production mode in Docker
-      - NODE_ENV=production
+        # Environment variables (loaded from backend/.env)
+        # You can override specific variables here if needed
+        # All variables from backend/.env are automatically loaded
+        environment:
+            # Force production mode in Docker
+            - NODE_ENV=production
 
-    # Volume mounts for data persistence
-    volumes:
-      # SQLite database files
-      - email-verifier-db:/app/backend/.sql
+        # Volume mounts for data persistence
+        volumes:
+            # SQLite database files
+            - email-verifier-db:/app/backend/.sql
 
-      # CSV files
-      - email-verifier-csv:/app/backend/csv
+            # CSV files
+            - email-verifier-csv:/app/backend/csv
 
-      # Application logs
-      - email-verifier-logs:/app/backend/.logs
+            # Application logs
+            - email-verifier-logs:/app/backend/.logs
 
-    # Restart policy
-    restart: unless-stopped
+        # Restart policy
+        restart: unless-stopped
 
-    # Network configuration
-    # Default bridge network allows outbound connections on any port including port 25
-    networks:
-      - default
+        # Network configuration
+        # Default bridge network allows outbound connections on any port including port 25
+        networks:
+            - default
 
-    # Health check
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+        # Health check
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
 
 # Named volumes for data persistence
 volumes:
-  email-verifier-db:
-    driver: local
-  email-verifier-csv:
-    driver: local
-  email-verifier-logs:
-    driver: local
+    email-verifier-db:
+        driver: local
+    email-verifier-csv:
+        driver: local
+    email-verifier-logs:
+        driver: local
 
 # Default network
 networks:
-  default:
-    driver: bridge
+    default:
+        driver: bridge
